@@ -37,8 +37,11 @@ type run1b struct {
 	Migrations int         `json:"migrations"`
 	LostGpuH   float64     `json:"lost_gpu_hours"`
 	Rejected   map[string]int
-	SolveP99   float64 `json:"solve_p99_ms"`
-	WallS      float64 `json:"wall_s"`
+	SolveP99   float64        `json:"solve_p99_ms"`
+	Batches    int            `json:"batches"`
+	Improved   int            `json:"improved_batches"`
+	Fallbacks  map[string]int `json:"fallbacks"`
+	WallS      float64        `json:"wall_s"`
 }
 
 func runSuite1b(args []string) error {
@@ -119,9 +122,11 @@ func runSuite1b(args []string) error {
 				arrivals := workload.Synthesize(rand.New(rand.NewSource(j.seed)), base, capMilli, j.load, n, maxDur.Seconds())
 				cfg := timed.Config{Nodes: nodes, Jobs: arrivals, Batch: *batch, MeasureFrom: warm.Seconds(), DrainLimit: 1}
 				name, defrag := strings.CutSuffix(j.variant, "+defrag")
+				var pl *mip.Placer
 				switch name {
 				case "gpupack":
-					cfg.Decider = &mip.Placer{Solver: client, Typical: typical, K: 16, TimeLimit: *limit, Deterministic: true, Workers: cpWorkers, IdleWeight: *idle, ObjectiveTypical: objTypical}
+					pl = &mip.Placer{Solver: client, Typical: typical, K: 16, TimeLimit: *limit, Deterministic: true, Workers: cpWorkers, IdleWeight: *idle, ObjectiveTypical: objTypical}
+					cfg.Decider = pl
 				default:
 					pol, err := sched.New(name, typical)
 					if err != nil {
@@ -148,6 +153,9 @@ func runSuite1b(args []string) error {
 					Alloc: 100 * r.AllocTimeAvg, Unplaced: r.Unplaced, PendingBy: r.PendingByGpus, Conflicts: r.BindConflicts,
 					Plans: r.Defrag.Plans, Migrations: r.Defrag.Migrations, LostGpuH: r.Defrag.LostGpuSec / 3600,
 					Rejected: r.Defrag.Rejected, SolveP99: pctl(r.SolveWall, 0.99), WallS: time.Since(t0).Seconds()}
+				if pl != nil {
+					res.Batches, res.Improved, res.Fallbacks = pl.Stats.Batches, pl.Stats.Improved, pl.Stats.Fallbacks
+				}
 				mu.Lock()
 				runs = append(runs, res)
 				fmt.Fprintf(os.Stderr, "  %-16s load %.1f seed %d: p95 %.0fs alloc %.2f%% unplaced %d %v moves %d (%.0fs)\n",

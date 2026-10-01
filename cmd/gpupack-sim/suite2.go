@@ -30,14 +30,17 @@ type run2 struct {
 	Window     int     `json:"window"`
 	P50, P95   float64
 	P99        float64
-	GangP95    float64 `json:"gang_p95"`
-	JCT        float64 `json:"jct_mean_h"`
-	Alloc      float64 `json:"alloc_pct"`
-	Pending    int     `json:"pending_at_end"`
-	Migrations int     `json:"migrations"`
-	LostGpuH   float64 `json:"lost_gpu_hours"`
-	SolveP99   float64 `json:"solve_p99_ms"`
-	WallS      float64 `json:"wall_s"`
+	GangP95    float64        `json:"gang_p95"`
+	JCT        float64        `json:"jct_mean_h"`
+	Alloc      float64        `json:"alloc_pct"`
+	Pending    int            `json:"pending_at_end"`
+	Migrations int            `json:"migrations"`
+	LostGpuH   float64        `json:"lost_gpu_hours"`
+	SolveP99   float64        `json:"solve_p99_ms"`
+	Batches    int            `json:"batches"`
+	Improved   int            `json:"improved_batches"`
+	Fallbacks  map[string]int `json:"fallbacks"`
+	WallS      float64        `json:"wall_s"`
 }
 
 // busiestWeeks returns start offsets (seconds) of the n busiest non-overlapping
@@ -175,8 +178,10 @@ func runSuite2(args []string) error {
 				cfg := timed.Config{Nodes: nodes, Jobs: arr, Batch: *batch, LocalGangMax: *domainSize,
 					MeasureFrom: warm / j.c, DrainLimit: 1}
 				name, defrag := strings.CutSuffix(j.variant, "+defrag")
+				var pl *mip.Placer
 				if name == "gpupack" {
-					cfg.Decider = &mip.Placer{Solver: client, Typical: typical, K: 16, TimeLimit: *limit, Deterministic: true, Workers: cpWorkers, IdleWeight: *idle, ObjectiveTypical: objTypical}
+					pl = &mip.Placer{Solver: client, Typical: typical, K: 16, TimeLimit: *limit, Deterministic: true, Workers: cpWorkers, IdleWeight: *idle, ObjectiveTypical: objTypical}
+					cfg.Decider = pl
 				} else {
 					pol, err := sched.New(name, typical)
 					if err != nil {
@@ -196,10 +201,13 @@ func runSuite2(args []string) error {
 					GangP95: quantiles(r.GangPendingLatency)(0.95), JCT: mean(r.JCT) / 3600, Alloc: 100 * r.AllocTimeAvg,
 					Pending: r.Unplaced, Migrations: r.Defrag.Migrations, LostGpuH: r.Defrag.LostGpuSec / 3600,
 					SolveP99: pctl(r.SolveWall, 0.99), WallS: time.Since(t0).Seconds()}
+				if pl != nil {
+					res.Batches, res.Improved, res.Fallbacks = pl.Stats.Batches, pl.Stats.Improved, pl.Stats.Fallbacks
+				}
 				mu.Lock()
 				runs = append(runs, res)
-				fmt.Fprintf(os.Stderr, "  %-16s x%.2f week %d: p95 %.0fs gang p95 %.0fs alloc %.2f%% pending %d moves %d (%.0fs)\n",
-					j.variant, j.c, j.w, res.P95, res.GangP95, res.Alloc, res.Pending, res.Migrations, res.WallS)
+				fmt.Fprintf(os.Stderr, "  %-16s x%.2f week %d: p95 %.0fs gang p95 %.0fs alloc %.2f%% pending %d moves %d batches %d improved %d fallbacks %v (%.0fs)\n",
+					j.variant, j.c, j.w, res.P95, res.GangP95, res.Alloc, res.Pending, res.Migrations, res.Batches, res.Improved, res.Fallbacks, res.WallS)
 				mu.Unlock()
 			}
 		}()
