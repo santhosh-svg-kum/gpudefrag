@@ -25,8 +25,21 @@ with a discrete-event simulator for comparing schedulers on real traces.
 
 ## Results
 
-See [`docs/RESULTS.md`](docs/RESULTS.md). Numbers there are copied verbatim
-from the generated reports in `results/*/report.md`.
+Full tables, paired statistics, and caveats are in
+[`docs/RESULTS.md`](docs/RESULTS.md). Numbers there are copied from the
+generated reports.
+
+- **Faithful baselines.** All six FGD baselines reproduce FGD's published
+  curves within ±1.0 pp (FGD itself within 0.10 pp).
+- **Beats FGD on FGD's own benchmark.** Batches of 16 reach +0.28 pp GPU
+  allocation at 130% load (10 seeds, non-overlapping CIs).
+- **Beats FGD under timed overload.** +0.31 ± 0.17 pp allocation at offered
+  load 1.1, on held-out seeds.
+- **Defrag recovers capacity under overload.** +2.64 ± 2.12 pp allocation
+  over Volcano-style binpack in the Helios gang backtest at 1.5× load.
+- **Negative results, reported.** gpupack loses to FGD with slack capacity
+  (load 0.9) and does not beat binpack on gang workloads. Both are diagnosed
+  in RESULTS.md, with planned fixes.
 
 ## Reproduce
 

@@ -14,7 +14,7 @@ before citing anything. All results are simulation results.
 | gpupack beats FGD under timed overload | suite 1b load 1.1, held-out seeds: +0.31 ± 0.17 pp allocation | moderate (5 seeds) |
 | gpupack is not better with slack capacity | suite 1b load 0.9 held-out: −0.56 ± 0.53 pp | moderate; diagnosed (§2) |
 | Defrag recovers capacity under overload | suite 2 ×1.5: Binpack+defrag +2.64 ± 2.12 pp allocation (paired by week) | moderate (4 weeks) |
-| Defrag helps elsewhere | +0.3 to +1.8 pp in suites 1b and 2 at a few tens of seconds of p95 | directional only |
+| Defrag helps elsewhere | about 0 to +1.8 pp allocation in suites 1b and 2, at a few tens of seconds of p95 | directional only |
 | gpupack placement beats Volcano-style binpack on gangs | not supported; slightly worse, not significant | negative result, diagnosed (§3) |
 
 ## 0. Calibration gate (baselines are faithful)

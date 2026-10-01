@@ -5,8 +5,8 @@ Ledger for the autonomous build loop. Newest notes at the bottom of each section
 ## Milestones
 - [x] M1 foundation + FGD-faithful baselines + calibration gate — plan: docs/superpowers/plans/2026-09-30-m1-foundation-calibration.md
 - [x] M2 CP-SAT solver service + MIP placement + suite 1a report
-- [~] M3 timed DES + busy-server latency + defrag + suite 1b
-- [~] M4 gangs/topology + Helios/Philly loader + Volcano gang baseline + suite 2 + README
+- [x] M3 timed DES + busy-server latency + defrag + suite 1b
+- [x] M4 gangs/topology + Helios/Philly loader + Volcano gang baseline + suite 2 + README
 
 ## M1 tasks
 - [x] 1 model  - [x] 2 trace  - [x] 3 frag  - [x] 4 workload
@@ -39,3 +39,9 @@ calibration gate PASSED
 - **M3** timed DES (event heap, busy-server latency, bind revalidation with conflict backoff, kube-style unschedulable queue), demand-driven defrag (CP-SAT min-cost migrations, checkpoint-aware cost, hysteresis). openb timestamps are snapshot-like (peak concurrency 1% of capacity) → suite 1b is SYNTHETIC: stratified 1/8 cluster, (pod, duration) bootstrapped from openb, durations ≤2h, Poisson at offered load ρ, 2h warm-up + 6h window.
 - **M4** Helios (Venus: 135×8 GPUs, multi-node gangs = 58% of GPU-time) backtest on the busiest weeks with synthetic 4-node topology domains; Binpack (Volcano) baseline; gangs + domain-local constraints in the pattern model; gang-aware hint and validation. Smoke: FGD hurts gangs badly (gang p95 596 s vs Binpack 2 s on the busiest week).
 - Fixed along the way: livelock on persistent bind conflicts (backoff), head-of-line blocking (unschedulable queue), orphaned solver processes (process-group kill).
+
+### 2026-10-01 — v1 complete
+- All suites run; results with paired statistics in docs/RESULTS.md (summary table at top).
+- Fixes found by the benchmarks: large-job starvation at moderate load (idle-node penalty + GPU-weighted fragmentation; chosen on seeds 42–43, evaluated on held-out 47–51), harness 2 h limit (detached runner).
+- v1.1 candidates: warm-start from best of FGD/Binpack hints + gang-aware objective; eviction grace period + restart-time sweep for defrag; latency work (parallel patterns, no-GIL solver path, decomposition, pipelining); more Helios windows.
+- v2: KWOK shadow twin (scheduler plugin + defrag controller next to Karpenter/KEDA/Volcano); elastic mode (provisioning + consolidation in the same optimization).
