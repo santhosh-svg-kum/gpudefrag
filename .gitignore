@@ -3,3 +3,4 @@ results/
 *.out
 __pycache__/
 .venv/
+bin/
