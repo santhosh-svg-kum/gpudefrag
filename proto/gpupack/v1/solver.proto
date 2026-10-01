@@ -87,6 +87,7 @@ message Movable {
   int32 gpu_num = 6;
   int64 gpu_milli = 7;
   int64 cost = 8;  // migration cost (lost GPU-milli-seconds + restart)
+  repeated int32 dests = 9;  // allowed destination nodes (GPU type, etc.); empty = any
 }
 
 message Move {

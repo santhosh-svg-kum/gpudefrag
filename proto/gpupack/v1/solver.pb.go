@@ -603,7 +603,8 @@ type Movable struct {
 	Mem           int64                  `protobuf:"varint,5,opt,name=mem,proto3" json:"mem,omitempty"`
 	GpuNum        int32                  `protobuf:"varint,6,opt,name=gpu_num,json=gpuNum,proto3" json:"gpu_num,omitempty"`
 	GpuMilli      int64                  `protobuf:"varint,7,opt,name=gpu_milli,json=gpuMilli,proto3" json:"gpu_milli,omitempty"`
-	Cost          int64                  `protobuf:"varint,8,opt,name=cost,proto3" json:"cost,omitempty"` // migration cost (lost GPU-milli-seconds + restart)
+	Cost          int64                  `protobuf:"varint,8,opt,name=cost,proto3" json:"cost,omitempty"`          // migration cost (lost GPU-milli-seconds + restart)
+	Dests         []int32                `protobuf:"varint,9,rep,packed,name=dests,proto3" json:"dests,omitempty"` // allowed destination nodes (GPU type, etc.); empty = any
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -692,6 +693,13 @@ func (x *Movable) GetCost() int64 {
 		return x.Cost
 	}
 	return 0
+}
+
+func (x *Movable) GetDests() []int32 {
+	if x != nil {
+		return x.Dests
+	}
+	return nil
 }
 
 type Move struct {
@@ -1065,7 +1073,7 @@ const file_gpupack_v1_solver_proto_rawDesc = "" +
 	"\x06wall_s\x18\x03 \x01(\x01R\x05wallS\x12-\n" +
 	"\x12deterministic_time\x18\x04 \x01(\x01R\x11deterministicTime\x12\x12\n" +
 	"\x04frag\x18\x05 \x01(\x01R\x04frag\x12#\n" +
-	"\rplaced_weight\x18\x06 \x01(\x03R\fplacedWeight\"\xaf\x01\n" +
+	"\rplaced_weight\x18\x06 \x01(\x03R\fplacedWeight\"\xc5\x01\n" +
 	"\aMovable\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x05R\x02id\x12\x12\n" +
 	"\x04node\x18\x02 \x01(\x05R\x04node\x12\x12\n" +
@@ -1074,7 +1082,8 @@ const file_gpupack_v1_solver_proto_rawDesc = "" +
 	"\x03mem\x18\x05 \x01(\x03R\x03mem\x12\x17\n" +
 	"\agpu_num\x18\x06 \x01(\x05R\x06gpuNum\x12\x1b\n" +
 	"\tgpu_milli\x18\a \x01(\x03R\bgpuMilli\x12\x12\n" +
-	"\x04cost\x18\b \x01(\x03R\x04cost\"E\n" +
+	"\x04cost\x18\b \x01(\x03R\x04cost\x12\x14\n" +
+	"\x05dests\x18\t \x03(\x05R\x05dests\"E\n" +
 	"\x04Move\x12\x10\n" +
 	"\x03pod\x18\x01 \x01(\x05R\x03pod\x12\x17\n" +
 	"\ato_node\x18\x02 \x01(\x05R\x06toNode\x12\x12\n" +
