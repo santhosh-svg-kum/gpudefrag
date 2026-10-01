@@ -20,6 +20,8 @@ func main() {
 		err = runSuite1a(os.Args[2:])
 	case "suite1b":
 		err = runSuite1b(os.Args[2:])
+	case "suite2":
+		err = runSuite2(os.Args[2:])
 	default:
 		usage()
 	}
@@ -30,6 +32,6 @@ func main() {
 }
 
 func usage() {
-	fmt.Fprintln(os.Stderr, "usage: gpupack-sim calib|suite1a|suite1b [flags]")
+	fmt.Fprintln(os.Stderr, "usage: gpupack-sim calib|suite1a|suite1b|suite2 [flags]")
 	os.Exit(2)
 }
