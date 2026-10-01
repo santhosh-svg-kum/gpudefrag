@@ -81,8 +81,8 @@ func TestDefragHysteresisRejectsExpensivePlans(t *testing.T) {
 
 func TestCheckpointMath(t *testing.T) {
 	cases := []struct{ done, phase, interval, want float64 }{
-		{100, 300, 1800, 0},    // before first checkpoint
-		{500, 300, 1800, 300},  // after first
+		{100, 300, 1800, 0},     // before first checkpoint
+		{500, 300, 1800, 300},   // after first
 		{2200, 300, 1800, 2100}, // after second
 	}
 	for _, c := range cases {

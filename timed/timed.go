@@ -49,7 +49,7 @@ type Config struct {
 	MeasureFrom float64
 	// ConflictBackoff delays the next session after a bind conflict (default 1s).
 	ConflictBackoff float64
-	Defrag     *DefragConfig
+	Defrag          *DefragConfig
 }
 
 type Result struct {
@@ -77,18 +77,18 @@ type job struct {
 }
 
 type state struct {
-	cfg      Config
-	eng      sim.Engine
-	c        *sim.Cluster
-	jobs     []*job
-	pending  []*job
-	busy     bool
-	dirty    bool
-	backoff  bool // last apply had conflicts: delay the next session
-	res      Result
-	horizon  float64
-	lastT    float64
-	allocInt float64
+	cfg        Config
+	eng        sim.Engine
+	c          *sim.Cluster
+	jobs       []*job
+	pending    []*job
+	busy       bool
+	dirty      bool
+	backoff    bool // last apply had conflicts: delay the next session
+	res        Result
+	horizon    float64
+	lastT      float64
+	allocInt   float64
 	lastDefrag float64
 }
 
@@ -270,4 +270,3 @@ func canBind(c *sim.Cluster, node int, p model.PodRes, gpus []int) bool {
 	}
 	return true
 }
-
