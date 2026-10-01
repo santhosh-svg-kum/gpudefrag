@@ -1,5 +1,7 @@
 # gpudefrag
 
+[![ci](https://github.com/santhosh-svg-kum/gpudefrag/actions/workflows/ci.yml/badge.svg)](https://github.com/santhosh-svg-kum/gpudefrag/actions/workflows/ci.yml)
+
 **Solver-backed GPU scheduling, with reproducible benchmarks against published baselines.**
 
 gpudefrag places GPU pods with a mixed-integer solver (OR-Tools CP-SAT). Three
@@ -125,6 +127,7 @@ The design decisions that matter:
 | `calib/` | FGD-protocol runner and calibration gate |
 | `solver/` | Python CP-SAT service (`uv run pytest` for its tests) |
 | `cmd/gpudefrag-sim` | `calib`, `suite1a`, `suite1b`, `suite2` |
+| `docs/` | `RESULTS.md` (benchmarks), `design/` (spec and per-milestone plans), `PROGRESS.md` (build log) |
 
 ## License and attribution
 

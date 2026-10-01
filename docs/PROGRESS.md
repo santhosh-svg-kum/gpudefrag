@@ -3,7 +3,7 @@
 Ledger for the autonomous build loop. Newest notes at the bottom of each section.
 
 ## Milestones
-- [x] M1 foundation + FGD-faithful baselines + calibration gate — plan: docs/superpowers/plans/2026-09-30-m1-foundation-calibration.md
+- [x] M1 foundation + FGD-faithful baselines + calibration gate — plan: docs/design/plans/2026-09-30-m1-foundation-calibration.md
 - [x] M2 CP-SAT solver service + MIP placement + suite 1a report
 - [x] M3 timed DES + busy-server latency + defrag + suite 1b
 - [x] M4 gangs/topology + Helios/Philly loader + Volcano gang baseline + suite 2 + README

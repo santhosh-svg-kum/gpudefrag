@@ -5,7 +5,7 @@
 **Goal:** Reproduce FGD's (ATC '23) published allocation curves for six
 policies on the openb default trace within ±1.0 pp, using our own Go code.
 
-**Spec:** `docs/superpowers/specs/2026-09-30-gpudefrag-design.md` (§5, §7.1, §7.3)
+**Spec:** `docs/design/specs/2026-09-30-gpudefrag-design.md` (§5, §7.1, §7.3)
 
 **Reference:** `hkust-adsl/kubernetes-scheduler-simulator` @
 `8f3d6417353c5083c6d56617f255fadd8dc306bc` (Apache-2.0).
