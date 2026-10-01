@@ -44,6 +44,8 @@ type Config struct {
 	Latency func(wall time.Duration, pods int) float64
 	// DrainLimit bounds the run at last arrival + DrainLimit (default 7 days).
 	DrainLimit float64
+	// ConflictBackoff delays the next session after a bind conflict (default 1s).
+	ConflictBackoff float64
 	Defrag     *DefragConfig
 }
 
@@ -79,6 +81,7 @@ type state struct {
 	pending  []*job
 	busy     bool
 	dirty    bool
+	backoff  bool // last apply had conflicts: delay the next session
 	res      Result
 	horizon  float64
 	lastT    float64
@@ -95,6 +98,9 @@ func Run(cfg Config) Result {
 	}
 	if cfg.DrainLimit <= 0 {
 		cfg.DrainLimit = 7 * 86400
+	}
+	if cfg.ConflictBackoff <= 0 {
+		cfg.ConflictBackoff = 1
 	}
 	s := &state{cfg: cfg, c: sim.NewCluster(cfg.Nodes), lastDefrag: math.Inf(-1)}
 	if n := len(cfg.Jobs); n > 0 {
@@ -141,7 +147,12 @@ func (s *state) trigger() {
 		return
 	}
 	s.busy = true
-	s.eng.Push(s.eng.Now(), sim.RankSession, s.session)
+	at := s.eng.Now()
+	if s.backoff {
+		at += s.cfg.ConflictBackoff
+		s.backoff = false
+	}
+	s.eng.Push(at, sim.RankSession, s.session)
 }
 
 func (s *state) session() {
@@ -171,7 +182,7 @@ func (s *state) apply(batch []*job, dec []*mip.Choice) {
 		j := batch[i]
 		if !canBind(s.c, ch.Node, j.Pod.Res, ch.GPUs) {
 			s.res.BindConflicts++
-			s.dirty = true
+			s.dirty, s.backoff = true, true
 			continue
 		}
 		s.start(j, ch.Node, ch.GPUs, s.eng.Now())

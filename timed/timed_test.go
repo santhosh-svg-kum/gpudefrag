@@ -110,3 +110,23 @@ func TestDeterministic(t *testing.T) {
 		t.Fatal("not deterministic")
 	}
 }
+
+// A decider that always conflicts must not livelock the simulator: retries
+// back off in virtual time and the run ends at the drain limit.
+type alwaysBad struct{}
+
+func (alwaysBad) Decide(c *sim.Cluster, pods []model.Pod) []*mip.Choice {
+	out := make([]*mip.Choice, len(pods))
+	for i := range out {
+		out[i] = &mip.Choice{Node: 0, GPUs: nil} // wrong GPU count
+	}
+	return out
+}
+
+func TestPersistentConflictsBackOff(t *testing.T) {
+	r := Run(Config{Nodes: nodes(1), Jobs: []trace.Job{gpuJob("a", 0, 10, 1000)}, Decider: alwaysBad{},
+		Batch: 1, Latency: fixed(0), DrainLimit: 100})
+	if r.Unplaced != 1 || r.BindConflicts == 0 || r.BindConflicts > 101 {
+		t.Fatalf("%+v", r)
+	}
+}
