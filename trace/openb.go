@@ -145,6 +145,9 @@ type Job struct {
 	Pod      model.Pod
 	Arrive   float64
 	Duration float64
+	// Gang lists every pod of a multi-pod job (all-or-nothing). Empty or
+	// one pod means a single-pod job described by Pod.
+	Gang []model.Pod
 }
 
 // LoadOpenbJobs is LoadOpenbPods plus duration = deletion_time - creation_time.

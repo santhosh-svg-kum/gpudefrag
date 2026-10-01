@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"math"
 	"math/rand"
+	"reflect"
 	"testing"
 
 	"gpupack/model"
@@ -58,7 +59,7 @@ func TestSynthesizeDeterministic(t *testing.T) {
 	a := Synthesize(rand.New(rand.NewSource(5)), baseJobs(), 100_000, 1, 100, 1e6)
 	b := Synthesize(rand.New(rand.NewSource(5)), baseJobs(), 100_000, 1, 100, 1e6)
 	for i := range a {
-		if a[i] != b[i] {
+		if !reflect.DeepEqual(a[i], b[i]) {
 			t.Fatal("same seed must give same jobs")
 		}
 	}
