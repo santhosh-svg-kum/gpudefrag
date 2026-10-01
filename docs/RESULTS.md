@@ -160,3 +160,18 @@ reductions, in expected payoff order:
 
 The first step is profiling the split between pattern generation, model
 build, RPC, and search, so effort goes to the measured bottleneck.
+
+## Known simplifications in the defrag model
+
+- **No eviction grace period.** The blocked pod binds at the instant the plan
+  is made. In Kubernetes, evicted pods first terminate gracefully (30 s by
+  default), so real waits for the unblocked job are about that much longer.
+- **Fixed 60 s restart.** Migrated pods pay restart time plus the work lost
+  since their last checkpoint. Lost work is modeled per pod; restart time is
+  a constant. Large training jobs reloading tens of GB of checkpoint may take
+  2–10 minutes. v1.1: model the grace period, and sweep restart time (60 s,
+  5 min, 15 min) to find where defrag stops paying off. The hysteresis rule
+  already refuses plans whose cost exceeds the benefit.
+- **Defrag never provisions nodes.** It only rearranges pods across running,
+  already-initialized nodes. Node provisioning (minutes) is the alternative
+  it avoids. Merging the two decisions is v2 (elastic mode).
