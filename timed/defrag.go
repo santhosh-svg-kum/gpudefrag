@@ -55,7 +55,7 @@ func (s *state) maybeDefrag() {
 	}
 	var blocked *job
 	for _, j := range s.pending {
-		if j.Pod.Res.GpuNum > 0 && !s.c.AnyFits(j.Pod.Res) {
+		if len(j.pods) == 1 && j.Pod.Res.GpuNum > 0 && !s.c.AnyFits(j.Pod.Res) {
 			blocked = j
 			break
 		}
@@ -72,13 +72,13 @@ func (s *state) maybeDefrag() {
 	var running []mip.Running
 	lost := map[int]float64{}
 	for _, j := range s.jobs {
-		if !j.running || j.Pod.Res.GpuNum == 0 {
+		if !j.running || j.Pod.Res.GpuNum == 0 || len(j.pods) > 1 { // gang pods never move
 			continue
 		}
 		done := j.workDone + math.Max(0, now-j.runStart)
 		l := done - lastCheckpoint(done, j.ckptPhase, d.CheckpointInterval)
 		lost[j.id] = l
-		running = append(running, mip.Running{ID: j.id, Node: j.node, GPUs: j.gpus, Res: j.Pod.Res,
+		running = append(running, mip.Running{ID: j.id, Node: j.nodes[0], GPUs: j.gpus[0], Res: j.Pod.Res,
 			Cost: float64(j.Pod.Res.TotalMilliGpu()) * (l + d.Restart)})
 	}
 	plan, why := d.Planner.Plan(s.c, blocked.Pod.Res, running)
@@ -95,18 +95,18 @@ func (s *state) maybeDefrag() {
 	s.account()
 	for _, m := range plan.Moves {
 		j := s.jobs[m.ID]
-		s.c.Unbind(j.node, j.Pod.Res, j.gpus)
+		s.unbindAll(j)
 	}
 	for _, m := range plan.Moves {
 		j := s.jobs[m.ID]
 		done := j.workDone + math.Max(0, now-j.runStart)
 		j.workDone = done - lost[j.id]
 		j.running = false
-		s.start(j, m.To, m.GPUs, now+d.Restart)
+		s.start(j, []int{m.To}, [][]int{m.GPUs}, now+d.Restart)
 		s.res.Defrag.Migrations++
 		s.res.Defrag.LostGpuSec += float64(j.Pod.Res.TotalMilliGpu()) / model.Milli * (lost[j.id] + d.Restart)
 	}
-	s.start(blocked, plan.Target, plan.TargetGPUs, now)
+	s.start(blocked, []int{plan.Target}, [][]int{plan.TargetGPUs}, now)
 	rest := s.pending[:0]
 	for _, j := range s.pending {
 		if j != blocked {

@@ -15,20 +15,31 @@ import (
 	"gpupack/trace"
 )
 
-// Decider chooses placements for a batch without mutating the cluster.
+// Decider chooses placements for a batch of jobs without mutating the
+// cluster: per request, a choice for every pod, or nil. *mip.Placer is one.
 type Decider interface {
-	Decide(c *sim.Cluster, pods []model.Pod) []*mip.Choice
+	DecideRequests(c *sim.Cluster, reqs []mip.Request) [][]*mip.Choice
 }
 
-// PolicyDecider runs a one-pod-at-a-time baseline on a scratch copy.
+// PolicyDecider runs a one-job-at-a-time baseline on a scratch copy: single
+// pods with sched.Place, gangs with sched.PlaceGang (Volcano-style gang
+// scheduling with backfill: a blocked job does not stop later ones).
 type PolicyDecider struct{ Policy sched.Policy }
 
-func (d PolicyDecider) Decide(c *sim.Cluster, pods []model.Pod) []*mip.Choice {
+func (d PolicyDecider) DecideRequests(c *sim.Cluster, reqs []mip.Request) [][]*mip.Choice {
 	scratch := sim.NewCluster(c.Nodes)
-	out := make([]*mip.Choice, len(pods))
-	for i, p := range pods {
-		if n, g, ok := sched.Place(scratch, d.Policy, p, nil); ok {
-			out[i] = &mip.Choice{Node: n, GPUs: g}
+	out := make([][]*mip.Choice, len(reqs))
+	for r, req := range reqs {
+		if len(req.Pods) == 1 {
+			if n, g, ok := sched.Place(scratch, d.Policy, req.Pods[0], nil); ok {
+				out[r] = []*mip.Choice{{Node: n, GPUs: g}}
+			}
+			continue
+		}
+		if nodes, gpus, ok := sched.PlaceGang(scratch, d.Policy, req.Pods, req.Local, nil); ok {
+			for k := range nodes {
+				out[r] = append(out[r], &mip.Choice{Node: nodes[k], GPUs: gpus[k]})
+			}
 		}
 	}
 	return out
@@ -38,7 +49,10 @@ type Config struct {
 	Nodes   []*model.NodeRes
 	Jobs    []trace.Job // sorted by Arrive
 	Decider Decider
-	Batch   int // max pods per session
+	Batch   int // max jobs per session
+	// LocalGangMax: gangs of at most this many pods must stay in one
+	// topology domain (0 = no topology constraint).
+	LocalGangMax int
 	// Latency maps a decision's wall time and batch size to virtual seconds.
 	// Default: max(wall, 1ms per pod).
 	Latency func(wall time.Duration, pods int) float64
@@ -53,7 +67,9 @@ type Config struct {
 }
 
 type Result struct {
-	GpuPendingLatency []float64 // seconds, GPU pods, in bind order
+	GpuPendingLatency  []float64 // seconds, GPU jobs, in bind order
+	GangPendingLatency []float64 // seconds, multi-pod jobs only
+	JCT                []float64 // completion - arrival, measured jobs that finished
 	AllocTimeAvg      float64   // mean allocated GPU fraction over [0, last arrival]
 	Unplaced          int
 	UnplacedGpuMilli  int64
@@ -66,9 +82,10 @@ type Result struct {
 type job struct {
 	trace.Job
 	id        int
+	pods      []model.Pod
 	enqueued  float64
-	node      int
-	gpus      []int
+	nodes     []int
+	gpus      [][]int
 	runStart  float64 // when current run makes progress from
 	workDone  float64 // checkpointed work carried into the current run
 	ckptPhase float64
@@ -110,7 +127,10 @@ func Run(cfg Config) Result {
 		s.horizon = cfg.Jobs[n-1].Arrive
 	}
 	for i, j := range cfg.Jobs {
-		jb := &job{Job: j, id: i}
+		jb := &job{Job: j, id: i, pods: j.Gang}
+		if len(jb.pods) == 0 {
+			jb.pods = []model.Pod{j.Pod}
+		}
 		if cfg.Defrag != nil {
 			jb.ckptPhase = cfg.Defrag.phase(i)
 		}
@@ -124,7 +144,9 @@ func Run(cfg Config) Result {
 	}
 	for _, j := range s.pending {
 		s.res.Unplaced++
-		s.res.UnplacedGpuMilli += j.Pod.Res.TotalMilliGpu()
+		for _, p := range j.pods {
+			s.res.UnplacedGpuMilli += p.Res.TotalMilliGpu()
+		}
 	}
 	return s.res
 }
@@ -168,7 +190,7 @@ func (s *state) session() {
 		if len(batch) == s.cfg.Batch {
 			break
 		}
-		ok, seen := fits[j.Pod.Res]
+		ok, seen := fits[j.Pod.Res] // gang pods share one shape
 		if !seen {
 			ok = s.c.AnyFits(j.Pod.Res)
 			fits[j.Pod.Res] = ok
@@ -186,33 +208,40 @@ func (s *state) session() {
 		return
 	}
 	s.res.Sessions++
-	pods := make([]model.Pod, len(batch))
+	reqs := make([]mip.Request, len(batch))
+	npods := 0
 	for i, j := range batch {
-		pods[i] = j.Pod
+		reqs[i] = mip.Request{Pods: j.pods, Local: len(j.pods) > 1 && len(j.pods) <= s.cfg.LocalGangMax}
+		npods += len(j.pods)
 	}
 	t0 := time.Now()
-	dec := s.cfg.Decider.Decide(s.c, pods)
+	dec := s.cfg.Decider.DecideRequests(s.c, reqs)
 	wall := time.Since(t0)
 	s.res.SolveWall = append(s.res.SolveWall, wall)
-	lat := s.cfg.Latency(wall, len(pods))
+	lat := s.cfg.Latency(wall, npods)
 	chosen := append([]*job(nil), batch...)
 	s.eng.Push(s.eng.Now()+lat, sim.RankBindApply, func() { s.apply(chosen, dec) })
 }
 
-func (s *state) apply(batch []*job, dec []*mip.Choice) {
+func (s *state) apply(batch []*job, dec [][]*mip.Choice) {
 	s.account()
 	placed := map[*job]bool{}
-	for i, ch := range dec {
-		if ch == nil {
+	for i, d := range dec {
+		if d == nil {
 			continue
 		}
 		j := batch[i]
-		if !canBind(s.c, ch.Node, j.Pod.Res, ch.GPUs) {
+		if !s.bindAll(j, d) {
 			s.res.BindConflicts++
 			s.dirty, s.backoff = true, true
 			continue
 		}
-		s.start(j, ch.Node, ch.GPUs, s.eng.Now())
+		s.unbindAll(j) // bindAll validated; start rebinds and records
+		nodes, gpus := make([]int, len(d)), make([][]int, len(d))
+		for k, ch := range d {
+			nodes[k], gpus[k] = ch.Node, ch.GPUs
+		}
+		s.start(j, nodes, gpus, s.eng.Now())
 		placed[j] = true
 	}
 	rest := s.pending[:0]
@@ -229,13 +258,48 @@ func (s *state) apply(batch []*job, dec []*mip.Choice) {
 	s.trigger()
 }
 
-// start binds j and schedules its completion; progress begins at runFrom.
-func (s *state) start(j *job, node int, gpus []int, runFrom float64) {
-	s.c.Bind(node, j.Pod.Res, gpus)
-	if j.gen == 0 && j.Pod.Res.GpuNum > 0 && j.Arrive >= s.cfg.MeasureFrom {
-		s.res.GpuPendingLatency = append(s.res.GpuPendingLatency, s.eng.Now()-j.enqueued)
+// bindAll binds every pod of j as decided, or none (revalidating each).
+func (s *state) bindAll(j *job, d []*mip.Choice) bool {
+	if len(d) != len(j.pods) {
+		return false
 	}
-	j.node, j.gpus, j.running, j.runStart = node, gpus, true, runFrom
+	for k, ch := range d {
+		if ch == nil || !canBind(s.c, ch.Node, j.pods[k].Res, ch.GPUs) {
+			for b := 0; b < k; b++ {
+				s.c.Unbind(d[b].Node, j.pods[b].Res, d[b].GPUs)
+			}
+			return false
+		}
+		s.c.Bind(ch.Node, j.pods[k].Res, ch.GPUs)
+	}
+	j.nodes = j.nodes[:0]
+	j.gpus = j.gpus[:0]
+	for _, ch := range d {
+		j.nodes = append(j.nodes, ch.Node)
+		j.gpus = append(j.gpus, ch.GPUs)
+	}
+	return true
+}
+
+func (s *state) unbindAll(j *job) {
+	for k, p := range j.pods {
+		s.c.Unbind(j.nodes[k], p.Res, j.gpus[k])
+	}
+}
+
+// start binds j's pods and schedules completion; progress begins at runFrom.
+func (s *state) start(j *job, nodes []int, gpus [][]int, runFrom float64) {
+	for k, p := range j.pods {
+		s.c.Bind(nodes[k], p.Res, gpus[k])
+	}
+	if j.gen == 0 && j.Pod.Res.GpuNum > 0 && j.Arrive >= s.cfg.MeasureFrom {
+		wait := s.eng.Now() - j.enqueued
+		s.res.GpuPendingLatency = append(s.res.GpuPendingLatency, wait)
+		if len(j.pods) > 1 {
+			s.res.GangPendingLatency = append(s.res.GangPendingLatency, wait)
+		}
+	}
+	j.nodes, j.gpus, j.running, j.runStart = nodes, gpus, true, runFrom
 	j.gen++
 	gen := j.gen
 	s.eng.Push(runFrom+(j.Duration-j.workDone), sim.RankCompletion, func() { s.complete(j, gen) })
@@ -246,8 +310,11 @@ func (s *state) complete(j *job, gen int) {
 		return // superseded by a migration
 	}
 	s.account()
-	s.c.Unbind(j.node, j.Pod.Res, j.gpus)
+	s.unbindAll(j)
 	j.running = false
+	if j.Arrive >= s.cfg.MeasureFrom && j.Arrive <= s.horizon {
+		s.res.JCT = append(s.res.JCT, s.eng.Now()-j.Arrive)
+	}
 	s.dirty = true
 	s.trigger()
 }

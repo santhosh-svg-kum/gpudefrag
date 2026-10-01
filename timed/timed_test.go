@@ -1,6 +1,7 @@
 package timed
 
 import (
+	"fmt"
 	"math"
 	"math/rand"
 	"reflect"
@@ -65,14 +66,14 @@ func TestUnplaceableCountedAtEnd(t *testing.T) {
 // bogus puts everyone on GPU 0 the first time, then behaves.
 type bogus struct{ calls *int }
 
-func (b bogus) Decide(c *sim.Cluster, pods []model.Pod) []*mip.Choice {
+func (b bogus) DecideRequests(c *sim.Cluster, reqs []mip.Request) [][]*mip.Choice {
 	*b.calls++
 	if *b.calls > 1 {
-		return bestFit().Decide(c, pods)
+		return bestFit().DecideRequests(c, reqs)
 	}
-	out := make([]*mip.Choice, len(pods))
+	out := make([][]*mip.Choice, len(reqs))
 	for i := range out {
-		out[i] = &mip.Choice{Node: 0, GPUs: []int{0}}
+		out[i] = []*mip.Choice{{Node: 0, GPUs: []int{0}}}
 	}
 	return out
 }
@@ -115,10 +116,10 @@ func TestDeterministic(t *testing.T) {
 // back off in virtual time and the run ends at the drain limit.
 type alwaysBad struct{}
 
-func (alwaysBad) Decide(c *sim.Cluster, pods []model.Pod) []*mip.Choice {
-	out := make([]*mip.Choice, len(pods))
+func (alwaysBad) DecideRequests(c *sim.Cluster, reqs []mip.Request) [][]*mip.Choice {
+	out := make([][]*mip.Choice, len(reqs))
 	for i := range out {
-		out[i] = &mip.Choice{Node: 0, GPUs: nil} // wrong GPU count
+		out[i] = []*mip.Choice{{Node: 0, GPUs: nil}} // wrong GPU count
 	}
 	return out
 }
@@ -151,5 +152,45 @@ func TestWarmupExcludedFromMetrics(t *testing.T) {
 	// window [40, 41]: one GPU fully used
 	if math.Abs(r.AllocTimeAvg-1) > 1e-9 {
 		t.Fatalf("alloc %v", r.AllocTimeAvg)
+	}
+}
+
+func gangJob(name string, arrive, dur float64, pods, gpus int) trace.Job {
+	j := trace.Job{Arrive: arrive, Duration: dur}
+	for k := 0; k < pods; k++ {
+		j.Gang = append(j.Gang, model.Pod{Name: fmt.Sprintf("%s-%d", name, k), Res: model.PodRes{MilliCPU: 1000, MemMiB: 1, GpuNum: gpus, GpuMilli: 1000}})
+	}
+	j.Pod = model.Pod{Name: name, Res: j.Gang[0].Res}
+	return j
+}
+
+func domainNodes(doms ...string) []*model.NodeRes {
+	var out []*model.NodeRes
+	for i, d := range doms {
+		n := model.NewNode(fmt.Sprintf("n%d", i), 96000, 1<<20, 8, "")
+		n.Domain = d
+		out = append(out, n)
+	}
+	return out
+}
+
+func TestGangBindsAllOrNothingAndCompletesTogether(t *testing.T) {
+	// 1-GPU job holds n0 until 100; the 2x8 gang must wait for two free nodes.
+	r := Run(Config{Nodes: domainNodes("d1", "d1"), Jobs: []trace.Job{gpuJob("small", 0, 100, 1000), gangJob("g", 10, 50, 2, 8)},
+		Decider: bestFit(), Batch: 4, Latency: fixed(0), LocalGangMax: 4})
+	if !reflect.DeepEqual(r.GangPendingLatency, []float64{90}) || !reflect.DeepEqual(r.JCT, []float64{100, 140}) {
+		t.Fatalf("gang wait %v jct %v", r.GangPendingLatency, r.JCT)
+	}
+}
+
+func TestLocalGangRespectsDomains(t *testing.T) {
+	// One free node in each domain: a local 2-pod gang cannot start, a non-local one can.
+	jobs := []trace.Job{gangJob("g", 0, 10, 2, 8)}
+	nodes := domainNodes("d1", "d2")
+	if r := Run(Config{Nodes: nodes, Jobs: jobs, Decider: bestFit(), Latency: fixed(0), LocalGangMax: 4, DrainLimit: 100}); r.Unplaced != 1 {
+		t.Fatalf("local gang split across domains: %+v", r)
+	}
+	if r := Run(Config{Nodes: nodes, Jobs: jobs, Decider: bestFit(), Latency: fixed(0), LocalGangMax: 0}); r.Unplaced != 0 {
+		t.Fatalf("unconstrained gang should run: %+v", r)
 	}
 }

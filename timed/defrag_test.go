@@ -13,12 +13,13 @@ import (
 // spread puts pod i of each batch on node (global count % nodes).
 type spread struct{ n *int }
 
-func (s spread) Decide(c *sim.Cluster, pods []model.Pod) []*mip.Choice {
-	out := make([]*mip.Choice, len(pods))
-	for i, p := range pods {
+func (s spread) DecideRequests(c *sim.Cluster, reqs []mip.Request) [][]*mip.Choice {
+	out := make([][]*mip.Choice, len(reqs))
+	for i, r := range reqs {
+		p := r.Pods[0]
 		node := *s.n % len(c.Nodes)
 		if sim.Fits(c.Nodes[node], p.Res) {
-			out[i] = &mip.Choice{Node: node, GPUs: sched.BestFitGPUs(c.Nodes[node], p.Res)}
+			out[i] = []*mip.Choice{{Node: node, GPUs: sched.BestFitGPUs(c.Nodes[node], p.Res)}}
 			*s.n++
 		}
 	}
