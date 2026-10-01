@@ -182,7 +182,8 @@ class _Model:
 
 def solve_patterns(req: pb.PlaceRequest) -> pb.PlaceResponse:
     """Column formulation: pick exactly one pattern per node, each pod at most
-    once; maximize placed weight, then minimize total fragmentation."""
+    once. Lexicographic objective in one solve: placed weight dominates, then
+    minimum total fragmentation (frag scaled to integer micro-GPU... milli*1000)."""
     t0 = time.monotonic()
     budget = req.time_limit_s or 0.5
     weight = {p.id: p.weight for p in req.pods}
@@ -197,38 +198,38 @@ def solve_patterns(req: pb.PlaceRequest) -> pb.PlaceResponse:
         m.AddExactlyOne(vs)
     for vs in by_pod.values():
         m.AddAtMostOne(vs)
-    placed = sum(v * sum(weight[a.pod] for a in pat.assignments) for v, pat in zip(u, req.patterns))
-    frag = sum(v * round(pat.frag * 1000) for v, pat in zip(u, req.patterns))
+    placed_c = [sum(weight[a.pod] for a in pat.assignments) for pat in req.patterns]
+    frag_c = [round(pat.frag * 1000) for pat in req.patterns]
+    # big > any possible total-frag difference, so one more unit of placed
+    # weight always beats any fragmentation saving.
+    big = sum(max((f for f, pat in zip(frag_c, req.patterns) if pat.node == n), default=0)
+              for n in by_node) + 1
+    m.Maximize(cp_model.LinearExpr.WeightedSum(u, [big * pc - fc for pc, fc in zip(placed_c, frag_c)]))
 
     hinted = {(a.pod, a.node, tuple(a.gpus)) for a in req.hint}
+    done = set()
     for v, pat in zip(u, req.patterns):
         mine = {(a.pod, a.node, tuple(a.gpus)) for a in pat.assignments}
-        node_hint = {h for h in hinted if h[1] == pat.node}
-        m.AddHint(v, mine == node_hint)
+        on = pat.node not in done and mine == {h for h in hinted if h[1] == pat.node}
+        if on:
+            done.add(pat.node)
+        m.AddHint(v, on)
 
-    m.Maximize(placed)
-    s1 = _params(req, 0.4 * budget)
-    st1 = s1.Solve(m)
-    if st1 not in (cp_model.OPTIMAL, cp_model.FEASIBLE):
-        return pb.PlaceResponse(status=s1.StatusName(st1), wall_s=time.monotonic() - t0)
-    best = int(round(s1.ObjectiveValue()))
-    m.ClearHints()
-    for v in u:
-        m.AddHint(v, s1.BooleanValue(v))
-    m.Add(placed >= best)
-    m.Minimize(frag)
-    s2 = _params(req, budget - (time.monotonic() - t0))
-    st2 = s2.Solve(m)
-    sol = s2 if st2 in (cp_model.OPTIMAL, cp_model.FEASIBLE) else s1
-    status = s2.StatusName(st2) if sol is s2 else "FEASIBLE"
-    if sol is s2 and st1 != cp_model.OPTIMAL and status == "OPTIMAL":
-        status = "FEASIBLE"
-    asg = [a for v, pat in zip(u, req.patterns) if sol.BooleanValue(v) for a in pat.assignments]
+    s = _params(req, budget)
+    # Many patterns are interchangeable (equal nodes, equal devices); symmetry
+    # detection can eat the whole budget in presolve, so skip it.
+    s.parameters.symmetry_level = 0
+    s.parameters.cp_model_probing_level = 0  # probing alone took ~0.6s on 5k patterns
+    st = s.Solve(m)
+    if st not in (cp_model.OPTIMAL, cp_model.FEASIBLE):
+        return pb.PlaceResponse(status=s.StatusName(st), wall_s=time.monotonic() - t0)
+    chosen = [pat for v, pat in zip(u, req.patterns) if s.BooleanValue(v)]
     return pb.PlaceResponse(
-        assignments=asg, status=status, wall_s=time.monotonic() - t0,
-        deterministic_time=s1.deterministic_time + (s2.deterministic_time if sol is s2 else 0),
-        frag=sum(pat.frag for v, pat in zip(u, req.patterns) if sol.BooleanValue(v)),
-        placed_weight=best)
+        assignments=[a for pat in chosen for a in pat.assignments],
+        status=s.StatusName(st), wall_s=time.monotonic() - t0,
+        deterministic_time=s.deterministic_time,
+        frag=sum(pat.frag for pat in chosen),
+        placed_weight=sum(weight[a.pod] for pat in chosen for a in pat.assignments))
 
 
 def solve_place(req: pb.PlaceRequest) -> pb.PlaceResponse:

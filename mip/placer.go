@@ -37,7 +37,13 @@ type Placer struct {
 	TimeLimit     time.Duration // solver budget per batch
 	Deterministic bool
 	Workers       int
-	Stats         Stats
+	// Pattern (column) formulation, the default: per-node subsets of up to
+	// MaxPatternSize batch pods (default 3), at most MaxPatterns per node
+	// (default 2000). Direct=true sends the direct CP-SAT model instead.
+	MaxPatternSize int
+	MaxPatterns    int
+	Direct         bool
+	Stats          Stats
 }
 
 type choice struct {
@@ -127,6 +133,9 @@ func (pl *Placer) solve(c *sim.Cluster, pods []model.Pod, hint []*choice, fgd sc
 	if len(req.Nodes) == 0 {
 		return nil, "empty"
 	}
+	if !pl.Direct {
+		req.Patterns = pl.patterns(c, pods, ids, cands, hint)
+	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), pl.TimeLimit*3/2+2*time.Second)
 	defer cancel()
@@ -144,6 +153,49 @@ func (pl *Placer) solve(c *sim.Cluster, pods []model.Pod, hint []*choice, fgd sc
 		return nil, "invalid"
 	}
 	return sol, ""
+}
+
+func (pl *Placer) patterns(c *sim.Cluster, pods []model.Pod, nodes []int, cands []map[int]bool, hint []*choice) []*pb.Pattern {
+	size, limit := pl.MaxPatternSize, pl.MaxPatterns
+	if size <= 0 {
+		size = 3
+	}
+	if limit <= 0 {
+		limit = 2000
+	}
+	var out []*pb.Pattern
+	for _, n := range nodes {
+		var here []int
+		for i := range pods {
+			if cands[i][n] && len(here) < 64 {
+				here = append(here, i)
+			}
+		}
+		for _, p := range genPatterns(c, n, here, pods, pl.Typical, size, limit) {
+			out = append(out, toPB(p))
+		}
+		// The hint's own pattern for this node keeps FGD's answer reachable.
+		h := pattern{node: n}
+		scratch := sim.NewCluster([]*model.NodeRes{c.Nodes[n]})
+		for i, ch := range hint {
+			if ch != nil && ch.node == n {
+				scratch.Bind(0, pods[i].Res, ch.gpus)
+				h.pods = append(h.pods, i)
+				h.gpus = append(h.gpus, ch.gpus)
+			}
+		}
+		h.frag = frag.NodeScore(scratch.Nodes[0], pl.Typical)
+		out = append(out, toPB(h))
+	}
+	return out
+}
+
+func toPB(p pattern) *pb.Pattern {
+	pp := &pb.Pattern{Node: int32(p.node), Frag: p.frag}
+	for k, i := range p.pods {
+		pp.Assignments = append(pp.Assignments, &pb.Assignment{Pod: int32(i), Node: int32(p.node), Gpus: toI32(p.gpus[k])})
+	}
+	return pp
 }
 
 // validate applies the solver's answer to a scratch cluster, checking every

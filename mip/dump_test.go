@@ -4,6 +4,7 @@ import (
 	"context"
 	"math/rand"
 	"os"
+	"strconv"
 	"testing"
 	"time"
 
@@ -42,6 +43,7 @@ func TestDumpRealRequest(t *testing.T) {
 	for _, p := range seq[:4000] {
 		sched.Place(c, fgd, p, nil)
 	}
-	pl := &Placer{Solver: dumpSolver{path}, Typical: typ, K: 16, TimeLimit: 500 * time.Millisecond}
+	size, _ := strconv.Atoi(os.Getenv("GPUPACK_PSIZE"))
+	pl := &Placer{Solver: dumpSolver{path}, Typical: typ, K: 16, TimeLimit: 500 * time.Millisecond, MaxPatternSize: size, MaxPatterns: 100000}
 	pl.PlaceBatch(c, seq[4000:4016])
 }
