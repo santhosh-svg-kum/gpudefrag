@@ -1,0 +1,6 @@
+name,cpu_milli,memory_mib,num_gpu,gpu_milli,gpu_spec,qos,pod_phase,creation_time,deletion_time,scheduled_time
+openb-pod-0001,12000,16384,1,1000,,LS,Running,0,12537496,0
+openb-pod-0002,6000,12288,1,460,,LS,Running,427061,12902960,427061
+openb-pod-0003,0,0,0,0,,BE,Running,5,10,5
+openb-pod-0004,16000,32768,1,1500,V100M16|V100M32,LS,Running,7,9,7
+openb-pod-0005,88000,327680,8,1000,,Burstable,Succeeded,9437497,10769854,9437497

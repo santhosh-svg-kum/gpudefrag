@@ -1,0 +1,7 @@
+gpupack
+Copyright 2026 gpupack authors
+
+This product includes ports of scheduling-policy and fragmentation code from
+kubernetes-scheduler-simulator (https://github.com/hkust-adsl/kubernetes-scheduler-simulator),
+Copyright the HKUST ADSL authors, licensed under the Apache License 2.0.
+Files containing ported logic say so in their package documentation.
