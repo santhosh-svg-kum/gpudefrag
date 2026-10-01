@@ -57,6 +57,16 @@ func (c *Cluster) Feasible(p model.PodRes) []int {
 	return out
 }
 
+// AnyFits reports whether at least one node passes Fits.
+func (c *Cluster) AnyFits(p model.PodRes) bool {
+	for _, n := range c.Nodes {
+		if Fits(n, p) {
+			return true
+		}
+	}
+	return false
+}
+
 // Bind places p on node i using the given GPU device indices. Over-commit is
 // an invariant violation and panics.
 func (c *Cluster) Bind(i int, p model.PodRes, gpus []int) {

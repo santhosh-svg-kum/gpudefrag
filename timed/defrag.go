@@ -55,7 +55,7 @@ func (s *state) maybeDefrag() {
 	}
 	var blocked *job
 	for _, j := range s.pending {
-		if j.Pod.Res.GpuNum > 0 && len(s.c.Feasible(j.Pod.Res)) == 0 {
+		if j.Pod.Res.GpuNum > 0 && !s.c.AnyFits(j.Pod.Res) {
 			blocked = j
 			break
 		}

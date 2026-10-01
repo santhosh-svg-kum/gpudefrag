@@ -130,3 +130,13 @@ func TestPersistentConflictsBackOff(t *testing.T) {
 		t.Fatalf("%+v", r)
 	}
 }
+
+func TestNoHeadOfLineBlocking(t *testing.T) {
+	big := gpuJob("big", 0, 10, 1000)
+	big.Pod.Res.GpuNum = 8
+	r := Run(Config{Nodes: nodes(2), Jobs: []trace.Job{big, gpuJob("small", 1, 10, 1000)},
+		Decider: bestFit(), Batch: 1, Latency: fixed(0)})
+	if len(r.GpuPendingLatency) != 1 || r.GpuPendingLatency[0] != 0 {
+		t.Fatalf("small pod must not wait behind an unplaceable one: %+v", r)
+	}
+}

@@ -157,8 +157,32 @@ func (s *state) trigger() {
 
 func (s *state) session() {
 	s.dirty = false
+	// Like kube's unschedulable queue: only pods that currently fit somewhere
+	// are tried; the rest wait for a cluster change (or defrag).
+	var batch []*job
+	fits := map[model.PodRes]bool{} // many pending pods share a shape
+	for _, j := range s.pending {
+		if len(batch) == s.cfg.Batch {
+			break
+		}
+		ok, seen := fits[j.Pod.Res]
+		if !seen {
+			ok = s.c.AnyFits(j.Pod.Res)
+			fits[j.Pod.Res] = ok
+		}
+		if ok {
+			batch = append(batch, j)
+		}
+	}
+	if len(batch) == 0 {
+		s.busy = false
+		if s.cfg.Defrag != nil {
+			s.maybeDefrag()
+			s.trigger()
+		}
+		return
+	}
 	s.res.Sessions++
-	batch := s.pending[:min(len(s.pending), s.cfg.Batch)]
 	pods := make([]model.Pod, len(batch))
 	for i, j := range batch {
 		pods[i] = j.Pod
