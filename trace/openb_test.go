@@ -32,11 +32,11 @@ func TestLoadOpenbPods(t *testing.T) {
 		t.Fatal(err)
 	}
 	want := []model.Pod{
-		{"openb-pod-0001", model.PodRes{MilliCPU: 12000, MemMiB: 16384, GpuNum: 1, GpuMilli: 1000}},
-		{"openb-pod-0002", model.PodRes{MilliCPU: 6000, MemMiB: 12288, GpuNum: 1, GpuMilli: 460}},
-		{"openb-pod-0003", model.PodRes{MilliCPU: 100, MemMiB: 200}}, // kube nonzero defaults
-		{"openb-pod-0004", model.PodRes{MilliCPU: 16000, MemMiB: 32768, GpuNum: 1, GpuMilli: 1000, GpuType: "V100M16|V100M32"}}, // clamped
-		{"openb-pod-0005", model.PodRes{MilliCPU: 88000, MemMiB: 327680, GpuNum: 8, GpuMilli: 1000}},
+		{Name: "openb-pod-0001", Res: model.PodRes{MilliCPU: 12000, MemMiB: 16384, GpuNum: 1, GpuMilli: 1000}},
+		{Name: "openb-pod-0002", Res: model.PodRes{MilliCPU: 6000, MemMiB: 12288, GpuNum: 1, GpuMilli: 460}},
+		{Name: "openb-pod-0003", Res: model.PodRes{MilliCPU: 100, MemMiB: 200}}, // kube nonzero defaults
+		{Name: "openb-pod-0004", Res: model.PodRes{MilliCPU: 16000, MemMiB: 32768, GpuNum: 1, GpuMilli: 1000, GpuType: "V100M16|V100M32"}}, // clamped
+		{Name: "openb-pod-0005", Res: model.PodRes{MilliCPU: 88000, MemMiB: 327680, GpuNum: 8, GpuMilli: 1000}},
 	}
 	if len(pods) != len(want) {
 		t.Fatalf("got %d pods", len(pods))
