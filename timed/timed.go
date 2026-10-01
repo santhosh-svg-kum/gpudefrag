@@ -44,6 +44,9 @@ type Config struct {
 	Latency func(wall time.Duration, pods int) float64
 	// DrainLimit bounds the run at last arrival + DrainLimit (default 7 days).
 	DrainLimit float64
+	// MeasureFrom ends the warm-up: latency is recorded only for pods arriving
+	// at or after it, and allocation is averaged over [MeasureFrom, last arrival].
+	MeasureFrom float64
 	// ConflictBackoff delays the next session after a bind conflict (default 1s).
 	ConflictBackoff float64
 	Defrag     *DefragConfig
@@ -102,7 +105,7 @@ func Run(cfg Config) Result {
 	if cfg.ConflictBackoff <= 0 {
 		cfg.ConflictBackoff = 1
 	}
-	s := &state{cfg: cfg, c: sim.NewCluster(cfg.Nodes), lastDefrag: math.Inf(-1)}
+	s := &state{cfg: cfg, c: sim.NewCluster(cfg.Nodes), lastDefrag: math.Inf(-1), lastT: cfg.MeasureFrom}
 	if n := len(cfg.Jobs); n > 0 {
 		s.horizon = cfg.Jobs[n-1].Arrive
 	}
@@ -116,8 +119,8 @@ func Run(cfg Config) Result {
 	}
 	s.eng.Run(s.horizon + cfg.DrainLimit)
 	s.account()
-	if s.horizon > 0 {
-		s.res.AllocTimeAvg = s.allocInt / (s.horizon * float64(s.c.TotalGpuMilli()))
+	if w := s.horizon - cfg.MeasureFrom; w > 0 {
+		s.res.AllocTimeAvg = s.allocInt / (w * float64(s.c.TotalGpuMilli()))
 	}
 	for _, j := range s.pending {
 		s.res.Unplaced++
@@ -229,7 +232,7 @@ func (s *state) apply(batch []*job, dec []*mip.Choice) {
 // start binds j and schedules its completion; progress begins at runFrom.
 func (s *state) start(j *job, node int, gpus []int, runFrom float64) {
 	s.c.Bind(node, j.Pod.Res, gpus)
-	if !j.running && j.workDone == 0 && j.gen == 0 && j.Pod.Res.GpuNum > 0 {
+	if j.gen == 0 && j.Pod.Res.GpuNum > 0 && j.Arrive >= s.cfg.MeasureFrom {
 		s.res.GpuPendingLatency = append(s.res.GpuPendingLatency, s.eng.Now()-j.enqueued)
 	}
 	j.node, j.gpus, j.running, j.runStart = node, gpus, true, runFrom

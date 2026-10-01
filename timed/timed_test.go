@@ -140,3 +140,16 @@ func TestNoHeadOfLineBlocking(t *testing.T) {
 		t.Fatalf("small pod must not wait behind an unplaceable one: %+v", r)
 	}
 }
+
+func TestWarmupExcludedFromMetrics(t *testing.T) {
+	// j1 (0..50) is warm-up; j2 waits 9s behind it but arrives at 41 > MeasureFrom=40.
+	r := Run(Config{Nodes: nodes(1), Jobs: []trace.Job{gpuJob("j1", 0, 50, 1000), gpuJob("j2", 41, 49, 1000)},
+		Decider: bestFit(), Batch: 1, Latency: fixed(0), MeasureFrom: 40})
+	if !reflect.DeepEqual(r.GpuPendingLatency, []float64{9}) {
+		t.Fatalf("latencies %v", r.GpuPendingLatency)
+	}
+	// window [40, 41]: one GPU fully used
+	if math.Abs(r.AllocTimeAvg-1) > 1e-9 {
+		t.Fatalf("alloc %v", r.AllocTimeAvg)
+	}
+}

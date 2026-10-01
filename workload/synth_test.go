@@ -1,6 +1,7 @@
 package workload
 
 import (
+	"fmt"
 	"math"
 	"math/rand"
 	"testing"
@@ -60,5 +61,35 @@ func TestSynthesizeDeterministic(t *testing.T) {
 		if a[i] != b[i] {
 			t.Fatal("same seed must give same jobs")
 		}
+	}
+}
+
+func TestSubsetNodesStratified(t *testing.T) {
+	var ns []*model.NodeRes
+	for i := 0; i < 80; i++ {
+		ns = append(ns, model.NewNode(fmt.Sprintf("v%02d", i), 1, 1, 8, "V100"))
+	}
+	for i := 0; i < 16; i++ {
+		ns = append(ns, model.NewNode(fmt.Sprintf("t%02d", i), 1, 1, 2, "T4"))
+	}
+	sub := SubsetNodes(rand.New(rand.NewSource(1)), ns, 0.125)
+	v, t4 := 0, 0
+	for _, n := range sub {
+		if n.GpuType == "V100" {
+			v++
+		} else {
+			t4++
+		}
+	}
+	if v != 10 || t4 != 2 {
+		t.Fatalf("v=%d t4=%d", v, t4)
+	}
+}
+
+func TestArrivalRate(t *testing.T) {
+	r := ArrivalRate(baseJobs(), 100_000, 1, 1e9)
+	// mean work = (500*100 + 2000*300 + 0*50)/3
+	if want := 100_000 / ((500*100 + 2000*300 + 0) / 3.0); math.Abs(r-want) > 1e-12 {
+		t.Fatalf("rate %v want %v", r, want)
 	}
 }
