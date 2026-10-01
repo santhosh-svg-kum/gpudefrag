@@ -1,0 +1,107 @@
+// The solver contract. Any optimizer (CP-SAT, HiGHS, Gurobi, ...) can sit
+// behind it; the Go scheduler validates every answer and falls back to FGD.
+syntax = "proto3";
+
+package gpupack.v1;
+
+option go_package = "gpupack/proto/gpupack/v1;gpupackv1";
+
+service Solver {
+  rpc Place(PlaceRequest) returns (PlaceResponse);
+  rpc Defrag(DefragRequest) returns (DefragResponse);
+  rpc Health(HealthRequest) returns (HealthResponse);
+}
+
+// One class of FGD's typical-pod distribution.
+message TypicalClass {
+  int64 cpu = 1;        // milli-CPU
+  int64 gpu_milli = 2;  // per-GPU milli; 0 = CPU-only class
+  int32 gpu_num = 3;
+  double pct = 4;       // 0..1
+}
+
+message Node {
+  int32 id = 1;
+  int64 cpu_left = 2;
+  int64 mem_left = 3;
+  repeated int64 gpu_left = 4;     // milli-GPU free per device
+  repeated bool class_access = 5;  // per TypicalClass: GPU type accessible
+  string domain = 6;               // topology domain (M4)
+}
+
+message Pod {
+  int32 id = 1;
+  int64 cpu = 2;
+  int64 mem = 3;
+  int32 gpu_num = 4;
+  int64 gpu_milli = 5;
+  repeated int32 candidates = 6;  // node ids the pod may use
+  int64 weight = 7;               // value of placing it
+  int32 gang = 8;                 // 0 = no gang (M4)
+}
+
+message Assignment {
+  int32 pod = 1;
+  int32 node = 2;
+  repeated int32 gpus = 3;
+}
+
+message PlaceRequest {
+  repeated Node nodes = 1;
+  repeated Pod pods = 2;
+  repeated TypicalClass classes = 3;
+  repeated Assignment hint = 4;
+  double time_limit_s = 5;
+  bool deterministic = 6;
+  int32 workers = 7;
+  bool gang_domains = 8;  // gangs must stay within one domain (M4)
+}
+
+message PlaceResponse {
+  repeated Assignment assignments = 1;
+  string status = 2;          // OPTIMAL, FEASIBLE, ...
+  double wall_s = 3;
+  double deterministic_time = 4;
+  double frag = 5;            // solver's objective, milli-GPU
+  int64 placed_weight = 6;
+}
+
+// A running pod that the defragmenter may move (M3).
+message Movable {
+  int32 id = 1;
+  int32 node = 2;
+  repeated int32 gpus = 3;
+  int64 cpu = 4;
+  int64 mem = 5;
+  int32 gpu_num = 6;
+  int64 gpu_milli = 7;
+  int64 cost = 8;  // migration cost (lost GPU-milli-seconds + restart)
+}
+
+message Move {
+  int32 pod = 1;
+  int32 to_node = 2;
+  repeated int32 gpus = 3;
+}
+
+message DefragRequest {
+  repeated Node nodes = 1;
+  repeated Pod blocked = 2;
+  repeated Movable movable = 3;
+  int32 max_moves = 4;
+  double time_limit_s = 5;
+  bool deterministic = 6;
+  int32 workers = 7;
+}
+
+message DefragResponse {
+  repeated Move moves = 1;
+  repeated Assignment placements = 2;  // blocked pods placed after the moves
+  string status = 3;
+  double wall_s = 4;
+  int64 benefit = 5;
+  int64 cost = 6;
+}
+
+message HealthRequest {}
+message HealthResponse { string version = 1; }
