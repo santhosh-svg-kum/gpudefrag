@@ -97,7 +97,7 @@ func runSuite2(args []string) error {
 	out := fs.String("out", "results/suite2", "output directory")
 	cluster := fs.String("cluster", "Venus", "Helios cluster")
 	variants := fs.String("variants", "Binpack,FGD,gpupack,Binpack+defrag,gpupack+defrag", "comma-separated variants")
-	compress := fs.String("compress", "1.0,1.25", "time-compression factors (load growth)")
+	compress := fs.String("compress", "1.0,1.25,1.5", "time-compression factors (load growth)")
 	windows := fs.Int("windows", 4, "busiest non-overlapping weeks to replay")
 	domainSize := fs.Int("domain", 4, "nodes per topology domain; gangs up to this many pods stay in one domain")
 	batch := fs.Int("batch", 16, "jobs per scheduling session")
