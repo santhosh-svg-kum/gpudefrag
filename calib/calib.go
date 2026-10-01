@@ -11,10 +11,10 @@ import (
 	"strconv"
 	"strings"
 
-	"gpupack/model"
-	"gpupack/sched"
-	"gpupack/sim"
-	"gpupack/workload"
+	"github.com/santhosh-svg-kum/gpudefrag/model"
+	"github.com/santhosh-svg-kum/gpudefrag/sched"
+	"github.com/santhosh-svg-kum/gpudefrag/sim"
+	"github.com/santhosh-svg-kum/gpudefrag/workload"
 )
 
 // Sample is cumulative arrived GPU demand vs. allocated GPU, both in milli-GPU.
@@ -29,7 +29,7 @@ type RunConfig struct {
 	Policy string // baseline name; ignored when Placer is set
 	Seed   int64
 	Ratio  float64 // workload inflation, 1.3 in FGD's experiments
-	// Placer, if set, places Batch consecutive arrivals at a time (gpupack).
+	// Placer, if set, places Batch consecutive arrivals at a time (gpudefrag).
 	Placer BatchPlacer
 	Batch  int
 }

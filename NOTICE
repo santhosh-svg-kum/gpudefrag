@@ -1,5 +1,5 @@
-gpupack
-Copyright 2026 gpupack authors
+gpudefrag
+Copyright 2026 gpudefrag authors
 
 This product includes ports of scheduling-policy and fragmentation code from
 kubernetes-scheduler-simulator (https://github.com/hkust-adsl/kubernetes-scheduler-simulator),

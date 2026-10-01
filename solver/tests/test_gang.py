@@ -1,6 +1,6 @@
 """Gang (all-or-nothing) and topology-domain constraints in the pattern model."""
-from gpupack_solver.pb.gpupack.v1 import solver_pb2 as pb
-from gpupack_solver.place import solve_place
+from gpudefrag_solver.pb.gpudefrag.v1 import solver_pb2 as pb
+from gpudefrag_solver.place import solve_place
 
 from test_place import CLASSES, all_patterns, apply
 

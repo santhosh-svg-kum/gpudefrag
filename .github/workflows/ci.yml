@@ -1,0 +1,36 @@
+name: ci
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - uses: astral-sh/setup-uv@v6
+      - name: Go vet and tests
+        run: go vet ./... && go test ./...
+      - name: Solver tests
+        run: cd solver && uv run pytest -q
+
+  calibration:
+    # Our ports of FGD's baselines must reproduce FGD's published curves
+    # within 1.0 pp before any comparison is meaningful.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - uses: actions/cache@v4
+        with:
+          path: data
+          key: data-${{ hashFiles('scripts/fetch-data.sh') }}
+      - name: Fetch pinned traces
+        run: ./scripts/fetch-data.sh data
+      - name: Calibration gate
+        run: go run ./cmd/gpudefrag-sim calib -data data -out results/calib

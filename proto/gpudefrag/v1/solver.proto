@@ -2,9 +2,9 @@
 // behind it; the Go scheduler validates every answer and falls back to FGD.
 syntax = "proto3";
 
-package gpupack.v1;
+package gpudefrag.v1;
 
-option go_package = "gpupack/proto/gpupack/v1;gpupackv1";
+option go_package = "github.com/santhosh-svg-kum/gpudefrag/proto/gpudefrag/v1;gpudefragv1";
 
 service Solver {
   rpc Place(PlaceRequest) returns (PlaceResponse);

@@ -8,9 +8,9 @@ import (
 
 	"google.golang.org/grpc"
 
-	"gpupack/model"
-	pb "gpupack/proto/gpupack/v1"
-	"gpupack/sim"
+	"github.com/santhosh-svg-kum/gpudefrag/model"
+	pb "github.com/santhosh-svg-kum/gpudefrag/proto/gpudefrag/v1"
+	"github.com/santhosh-svg-kum/gpudefrag/sim"
 )
 
 // DefragSolver is the subset of the gRPC client the defragmenter needs.

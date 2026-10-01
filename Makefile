@@ -5,10 +5,10 @@ test:
 data:
 	./scripts/fetch-data.sh data
 calib: data
-	go run ./cmd/gpupack-sim calib -data data -out results/calib
+	go run ./cmd/gpudefrag-sim calib -data data -out results/calib
 suite1a: data
-	go run ./cmd/gpupack-sim suite1a -data data -out results/suite1a
+	go run ./cmd/gpudefrag-sim suite1a -data data -out results/suite1a
 suite1b: data
-	go run ./cmd/gpupack-sim suite1b -data data -out results/suite1b
+	go run ./cmd/gpudefrag-sim suite1b -data data -out results/suite1b
 suite2: data
-	go run ./cmd/gpupack-sim suite2 -data data -out results/suite2
+	go run ./cmd/gpudefrag-sim suite2 -data data -out results/suite2

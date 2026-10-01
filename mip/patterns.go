@@ -1,10 +1,10 @@
 package mip
 
 import (
-	"gpupack/frag"
-	"gpupack/model"
-	"gpupack/sched"
-	"gpupack/sim"
+	"github.com/santhosh-svg-kum/gpudefrag/frag"
+	"github.com/santhosh-svg-kum/gpudefrag/model"
+	"github.com/santhosh-svg-kum/gpudefrag/sched"
+	"github.com/santhosh-svg-kum/gpudefrag/sim"
 )
 
 // pattern is one way to fill a node with a subset of the batch: the pods,

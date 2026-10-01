@@ -9,7 +9,7 @@ import time
 
 from ortools.sat.python import cp_model
 
-from .pb.gpupack.v1 import solver_pb2 as pb
+from .pb.gpudefrag.v1 import solver_pb2 as pb
 
 
 def solve_defrag(req: pb.DefragRequest) -> pb.DefragResponse:

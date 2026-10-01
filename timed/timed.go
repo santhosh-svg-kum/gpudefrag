@@ -8,11 +8,11 @@ import (
 	"math"
 	"time"
 
-	"gpupack/mip"
-	"gpupack/model"
-	"gpupack/sched"
-	"gpupack/sim"
-	"gpupack/trace"
+	"github.com/santhosh-svg-kum/gpudefrag/mip"
+	"github.com/santhosh-svg-kum/gpudefrag/model"
+	"github.com/santhosh-svg-kum/gpudefrag/sched"
+	"github.com/santhosh-svg-kum/gpudefrag/sim"
+	"github.com/santhosh-svg-kum/gpudefrag/trace"
 )
 
 // Decider chooses placements for a batch of jobs without mutating the

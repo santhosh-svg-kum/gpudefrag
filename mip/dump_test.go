@@ -11,11 +11,11 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/protobuf/proto"
 
-	pb "gpupack/proto/gpupack/v1"
-	"gpupack/sched"
-	"gpupack/sim"
-	"gpupack/trace"
-	"gpupack/workload"
+	pb "github.com/santhosh-svg-kum/gpudefrag/proto/gpudefrag/v1"
+	"github.com/santhosh-svg-kum/gpudefrag/sched"
+	"github.com/santhosh-svg-kum/gpudefrag/sim"
+	"github.com/santhosh-svg-kum/gpudefrag/trace"
+	"github.com/santhosh-svg-kum/gpudefrag/workload"
 )
 
 type dumpSolver struct{ path string }

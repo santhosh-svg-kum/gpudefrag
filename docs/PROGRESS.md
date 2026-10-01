@@ -1,4 +1,4 @@
-# gpupack progress
+# gpudefrag progress
 
 Ledger for the autonomous build loop. Newest notes at the bottom of each section.
 
@@ -35,7 +35,7 @@ calibration gate PASSED
 
 ### 2026-10-01 — M2/M3/M4 code complete; full benchmark runs in progress
 - **M2** CP-SAT solver service + MIP placement. Direct reified model was too weak (no improvement over the FGD hint in 2 s); replaced by a **pattern (column) formulation**: Go enumerates per-node subsets (≤3 pods) with exact FGD fragmentation, CP-SAT solves set packing (placed weight ≫ frag). Presolve symmetry + probing disabled (they ate the whole budget). Finding: on a real mid-run batch FGD's answer is *proven optimal* for its own objective, so gains come from batch look-ahead, not per-pod precision.
-- Suite 1a smoke (seed 42): FGD 95.46%, gpupack B=16 95.77% (+0.31 pp), **B=1 94.93% (worse)** — optimizing FGD's exact metric per pod loses FGD's tie-breaking (quantized score + node name), which acts as implicit packing.
+- Suite 1a smoke (seed 42): FGD 95.46%, gpudefrag B=16 95.77% (+0.31 pp), **B=1 94.93% (worse)** — optimizing FGD's exact metric per pod loses FGD's tie-breaking (quantized score + node name), which acts as implicit packing.
 - **M3** timed DES (event heap, busy-server latency, bind revalidation with conflict backoff, kube-style unschedulable queue), demand-driven defrag (CP-SAT min-cost migrations, checkpoint-aware cost, hysteresis). openb timestamps are snapshot-like (peak concurrency 1% of capacity) → suite 1b is SYNTHETIC: stratified 1/8 cluster, (pod, duration) bootstrapped from openb, durations ≤2h, Poisson at offered load ρ, 2h warm-up + 6h window.
 - **M4** Helios (Venus: 135×8 GPUs, multi-node gangs = 58% of GPU-time) backtest on the busiest weeks with synthetic 4-node topology domains; Binpack (Volcano) baseline; gangs + domain-local constraints in the pattern model; gang-aware hint and validation. Smoke: FGD hurts gangs badly (gang p95 596 s vs Binpack 2 s on the busiest week).
 - Fixed along the way: livelock on persistent bind conflicts (backoff), head-of-line blocking (unschedulable queue), orphaned solver processes (process-group kill).
@@ -45,3 +45,6 @@ calibration gate PASSED
 - Fixes found by the benchmarks: large-job starvation at moderate load (idle-node penalty + GPU-weighted fragmentation; chosen on seeds 42–43, evaluated on held-out 47–51), harness 2 h limit (detached runner).
 - v1.1 candidates: warm-start from best of FGD/Binpack hints + gang-aware objective; eviction grace period + restart-time sweep for defrag; latency work (parallel patterns, no-GIL solver path, decomposition, pipelining); more Helios windows.
 - v2: KWOK shadow twin (scheduler plugin + defrag controller next to Karpenter/KEDA/Volcano); elastic mode (provisioning + consolidation in the same optimization).
+
+### 2026-10-01 — renamed to gpudefrag
+Project renamed from `gpupack` to **gpudefrag** for the open-source release (module `github.com/santhosh-svg-kum/gpudefrag`, proto `gpudefrag.v1`, Python `gpudefrag_solver`, CLI `gpudefrag-sim`). Benchmark runs above were produced under the old name; the variant labelled `gpudefrag` in RESULTS.md is the one reported as `gpupack` in the original run logs. Added GitHub Actions CI (Go + solver tests, calibration gate). Minimum Go 1.25 (required by gRPC).

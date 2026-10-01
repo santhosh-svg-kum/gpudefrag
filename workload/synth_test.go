@@ -7,8 +7,8 @@ import (
 	"reflect"
 	"testing"
 
-	"gpupack/model"
-	"gpupack/trace"
+	"github.com/santhosh-svg-kum/gpudefrag/model"
+	"github.com/santhosh-svg-kum/gpudefrag/trace"
 )
 
 func baseJobs() []trace.Job {

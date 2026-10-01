@@ -1,5 +1,5 @@
 [project]
-name = "gpupack-solver"
+name = "gpudefrag-solver"
 version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"

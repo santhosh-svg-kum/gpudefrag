@@ -10,8 +10,8 @@ import (
 	"math/rand"
 	"sort"
 
-	"gpupack/frag"
-	"gpupack/model"
+	"github.com/santhosh-svg-kum/gpudefrag/frag"
+	"github.com/santhosh-svg-kum/gpudefrag/model"
 )
 
 // Prepare returns the pod submission order for one seeded run: pods sorted by

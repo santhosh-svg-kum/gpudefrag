@@ -6,8 +6,8 @@ import (
 	"math/rand"
 	"sort"
 
-	"gpupack/model"
-	"gpupack/trace"
+	"github.com/santhosh-svg-kum/gpudefrag/model"
+	"github.com/santhosh-svg-kum/gpudefrag/trace"
 )
 
 // Synthesize generates n jobs for a timed run (design doc §10.1, parametric

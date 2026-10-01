@@ -8,7 +8,7 @@ import (
 	"strconv"
 	"strings"
 
-	"gpupack/model"
+	"github.com/santhosh-svg-kum/gpudefrag/model"
 )
 
 // Kubernetes' non-zero request defaults, which FGD's simulator applies when a

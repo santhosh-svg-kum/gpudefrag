@@ -5,7 +5,7 @@
 **Goal:** Reproduce FGD's (ATC '23) published allocation curves for six
 policies on the openb default trace within ±1.0 pp, using our own Go code.
 
-**Spec:** `docs/superpowers/specs/2026-09-30-gpupack-design.md` (§5, §7.1, §7.3)
+**Spec:** `docs/superpowers/specs/2026-09-30-gpudefrag-design.md` (§5, §7.1, §7.3)
 
 **Reference:** `hkust-adsl/kubernetes-scheduler-simulator` @
 `8f3d6417353c5083c6d56617f255fadd8dc306bc` (Apache-2.0).
@@ -15,7 +15,7 @@ suite 1a has no time dimension. The event-heap DES lands in M3, where timed
 replay first needs it.
 
 ## Global constraints
-- Go module `gpupack`, stdlib only in M1. Integer units: milli-CPU, MiB, milli-GPU.
+- Go module `gpudefrag`, stdlib only in M1. Integer units: milli-CPU, MiB, milli-GPU.
 - Gate: workload `openb_pod_list_default`, tune 1.3, seeds 42–51. Policies:
   Random, DotProd, GpuClustering, GpuPacking, BestFit, FGD. Points:
   50, 80, 100, 110, 120, 130. Tolerance ±1.0 pp on the seed mean.
@@ -78,7 +78,7 @@ replay first needs it.
    invariants.
 6. `sched/`: policies, GPU selectors, and `Place`.
 7. `calib/`: arrival runner, discretizer, reference loader, gate.
-8. `cmd/gpupack-sim calib`, the Makefile, and a real gate run.
+8. `cmd/gpudefrag-sim calib`, the Makefile, and a real gate run.
 
 ## Review focus
 - Pods with a GPU type no node has: counted as arrived, fail cleanly.

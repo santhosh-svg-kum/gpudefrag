@@ -5,9 +5,9 @@
 // versions:
 // - protoc-gen-go-grpc v1.6.2
 // - protoc             v6.33.5
-// source: gpupack/v1/solver.proto
+// source: gpudefrag/v1/solver.proto
 
-package gpupackv1
+package gpudefragv1
 
 import (
 	context "context"
@@ -22,9 +22,9 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	Solver_Place_FullMethodName  = "/gpupack.v1.Solver/Place"
-	Solver_Defrag_FullMethodName = "/gpupack.v1.Solver/Defrag"
-	Solver_Health_FullMethodName = "/gpupack.v1.Solver/Health"
+	Solver_Place_FullMethodName  = "/gpudefrag.v1.Solver/Place"
+	Solver_Defrag_FullMethodName = "/gpudefrag.v1.Solver/Defrag"
+	Solver_Health_FullMethodName = "/gpudefrag.v1.Solver/Health"
 )
 
 // SolverClient is the client API for Solver service.
@@ -179,7 +179,7 @@ func _Solver_Health_Handler(srv interface{}, ctx context.Context, dec func(inter
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
 var Solver_ServiceDesc = grpc.ServiceDesc{
-	ServiceName: "gpupack.v1.Solver",
+	ServiceName: "gpudefrag.v1.Solver",
 	HandlerType: (*SolverServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{
@@ -196,5 +196,5 @@ var Solver_ServiceDesc = grpc.ServiceDesc{
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
-	Metadata: "gpupack/v1/solver.proto",
+	Metadata: "gpudefrag/v1/solver.proto",
 }

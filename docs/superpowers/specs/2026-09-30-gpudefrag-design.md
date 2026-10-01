@@ -1,4 +1,4 @@
-# gpupack v1 — Design Spec
+# gpudefrag v1 — Design Spec
 
 - **Date:** 2026-09-30
 - **Status:** Draft, awaiting review
@@ -9,14 +9,14 @@
 
 ## 1. Purpose and success criteria
 
-gpupack is an open-source, fragmentation-aware GPU scheduler that uses a
+gpudefrag is an open-source, fragmentation-aware GPU scheduler that uses a
 mixed-integer solver (OR-Tools CP-SAT), plus a discrete-event simulator (DES)
 to benchmark it reproducibly against published baselines.
 
 v1 is successful when one command per suite produces a report that supports a
 claim of this form, with confidence intervals:
 
-> On the Alibaba openb trace, gpupack allocates X pp more GPUs than FGD at
+> On the Alibaba openb trace, gpudefrag allocates X pp more GPUs than FGD at
 > 100–130% arrived load; with defrag enabled it unblocks Y% of
 > fragmentation-blocked pods at Z GPU-seconds of lost work; p99 solve time is
 > W ms at a 500 ms budget. On gang training traces it cuts p95 queueing delay
@@ -34,8 +34,8 @@ Comparisons are reported only after the calibration gate (§7.3) passes.
   jobs, and topology domains.
 - Baseline schedulers: Random, DotProd, BestFit, GpuPacking, GpuClustering, FGD,
   FGD-gang, and VolcanoGangBinpack (modeled).
-- gpupack placement: FGD warm start, then CP-SAT batch improvement.
-- gpupack defrag: demand-driven, minimum-cost migration on the fixed cluster.
+- gpudefrag placement: FGD warm start, then CP-SAT batch improvement.
+- gpudefrag defrag: demand-driven, minimum-cost migration on the fixed cluster.
 - Benchmark suites 1a, 1b, and 2, with a calibration gate and reports.
 
 **Out of v1 (later)**
@@ -49,19 +49,19 @@ Comparisons are reported only after the calibration gate (§7.3) passes.
 ## 3. Architecture
 
 ```
-gpupack/
-  go.mod                  module github.com/<owner>/gpupack
-  cmd/gpupack-sim/        CLI: run an experiment spec → results
+gpudefrag/
+  go.mod                  module github.com/<owner>/gpudefrag
+  cmd/gpudefrag-sim/        CLI: run an experiment spec → results
   sim/                    DES: event heap, virtual clock, cluster state, invariants, metrics
   model/                  Node, GPU, Pod, Gang, Domain types; integer units
   trace/                  loaders: openb (suite 1), helios/philly (suite 2) → common schema
   frag/                   FGD fragmentation measure + task-size distribution
   sched/                  interfaces (Scheduler, Defragmenter)
-    baselines/            random, dotprod, bestfit, gpupacking, gpuclustering, fgd, fgdgang, volcanogang
+    baselines/            random, dotprod, bestfit, gpudefraging, gpuclustering, fgd, fgdgang, volcanogang
     mip/                  Go client: build request, call solver, validate, fall back to FGD
-  proto/gpupack/v1/       solver.proto (the swap boundary)
+  proto/gpudefrag/v1/       solver.proto (the swap boundary)
   solver/                 Python service (uv project): grpc server + CP-SAT models
-    gpupack_solver/place.py, defrag.py, server.py
+    gpudefrag_solver/place.py, defrag.py, server.py
     tests/                brute-force optimality + hypothesis property tests
   bench/                  experiment YAML specs, runner, report generator (plots + markdown)
   calib/                  FGD reproduction (calibration gate)
@@ -137,7 +137,7 @@ FGD picks the minimum. The exact definition is copied from FGD's open-source
 implementation (`hkust-adsl/kubernetes-scheduler-simulator`, Apache-2.0) and
 verified by the calibration gate.
 
-## 6. gpupack algorithms
+## 6. gpudefrag algorithms
 
 ### 6.1 Placement (each session)
 
@@ -183,7 +183,7 @@ verified by the calibration gate.
   `max_deterministic_time` is used instead.
 
 **Guarantee:** the returned objective is ≥ the hint's objective, and the
-fallback is the hint itself. So gpupack's placement is never worse than FGD's
+fallback is the hint itself. So gpudefrag's placement is never worse than FGD's
 on the session objective. This is checked by property tests (§9).
 
 ### 6.2 Defrag (demand-driven, fixed cluster)
@@ -216,7 +216,7 @@ on the session objective. This is checked by property tests (§9).
   - If the target disappears or a move fails revalidation, the remaining moves
     are aborted.
 - **Baseline for defrag:** none in the literature matches this exactly. We
-  compare gpupack with and without defrag, and against FGD plus a modeled
+  compare gpudefrag with and without defrag, and against FGD plus a modeled
   descheduler `HighNodeUtilization` rule at equal migration budget.
 
 ## 7. Benchmarks
@@ -234,10 +234,10 @@ on the session objective. This is checked by property tests (§9).
   workload (% of capacity). Also fragmentation ratio and failed pods.
 - **Policies:**
   - Random, DotProd, BestFit, GpuPacking, GpuClustering, FGD
-  - gpupack placement at T ∈ {100 ms, 500 ms, 2 s}
+  - gpudefrag placement at T ∈ {100 ms, 500 ms, 2 s}
 - **Arrivals in batches:** suite 1a has no clock. "Session batch" means the
   next B arrivals, which is a deliberate difference from FGD's one-at-a-time
-  submission. We also report gpupack with B=1, which isolates the solver gain
+  submission. We also report gpudefrag with B=1, which isolates the solver gain
   from the batching gain.
 
 ### 7.2 Suite 1b — timed replay with departures
@@ -245,7 +245,7 @@ on the session objective. This is checked by property tests (§9).
 - Pods that never ran get a sampled duration.
 - Measures pending latency (p50/p95/p99), allocation over time, blocked pods,
   defrag moves, lost GPU-seconds, solve-time distribution, and fallback count.
-- Policies: FGD, gpupack placement, and gpupack placement + defrag.
+- Policies: FGD, gpudefrag placement, and gpudefrag placement + defrag.
 
 ### 7.3 Calibration gate
 `make calib` runs our FGD and baselines on suite 1a. It passes when each
@@ -260,8 +260,8 @@ file is present and passing.
   ≥ 8 GPUs become gangs of 8-GPU pods. Smaller jobs are single pods.
 - **Cluster:** synthetic. N nodes × 8 GPUs, in domains of 4 nodes. N is sized
   so the trace reaches 70–90% utilization.
-- **Policies:** VolcanoGangBinpack (modeled), FGD-gang, gpupack placement, and
-  gpupack placement + defrag.
+- **Policies:** VolcanoGangBinpack (modeled), FGD-gang, gpudefrag placement, and
+  gpudefrag placement + defrag.
 - **Metrics:** queueing delay (p50/p95/p99), JCT, allocated GPU %, stranded
   GPUs, migrations, lost GPU-seconds, solve time.
 
@@ -271,7 +271,7 @@ file is present and passing.
 - Hardware and solver version are stamped into every report.
 - Outputs: `results/<experiment>/<run>.parquet` plus `report.md` and PNG plots.
 
-## 8. Solver service contract (`proto/gpupack/v1/solver.proto`)
+## 8. Solver service contract (`proto/gpudefrag/v1/solver.proto`)
 
 - `Place(PlaceRequest) → PlaceResponse`
   - Request: nodes (with per-GPU free milli, CPU, memory, domain), pods, gangs,
@@ -334,6 +334,6 @@ solver (HiGHS, Gurobi) can implement it.
   that are downloaded, not redistributed.
 
 ## 12. Open questions
-- Final project name and GitHub owner. `gpupack` is a placeholder.
+- Final project name and GitHub owner. `gpudefrag` is a placeholder.
 - Whether suite 2 uses Helios or Philly. Decided by which one has usable
   per-job GPU counts and submit times once downloaded.

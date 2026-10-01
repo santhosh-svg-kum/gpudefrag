@@ -1,18 +1,18 @@
-# gpupack
+# gpudefrag
 
 **Solver-backed GPU scheduling, with reproducible benchmarks against published baselines.**
 
-gpupack places GPU pods with a mixed-integer solver (OR-Tools CP-SAT). Three
+gpudefrag places GPU pods with a mixed-integer solver (OR-Tools CP-SAT). Three
 pieces do the work:
 
-- **Batch placement.** gpupack optimizes FGD's own fragmentation measure
+- **Batch placement.** gpudefrag optimizes FGD's own fragmentation measure
   ([Weng et al., USENIX ATC '23](https://www.usenix.org/conference/atc23/presentation/weng))
   jointly over a batch of pending pods, instead of greedily one pod at a time.
-- **FGD warm start.** Each solve starts from FGD's answer. gpupack validates
+- **FGD warm start.** Each solve starts from FGD's answer. gpudefrag validates
   every solver result and keeps whichever of the two is better, so it is
   **never worse than FGD on a batch**.
 - **Demand-driven defragmentation.** When a pending pod is blocked only
-  because free GPUs are scattered, gpupack finds the cheapest set of
+  because free GPUs are scattered, gpudefrag finds the cheapest set of
   migrations that frees room for it. A migration's cost is the work lost
   since the pod's last checkpoint plus restart time.
 
@@ -37,13 +37,13 @@ generated reports.
   load 1.1, on held-out seeds.
 - **Defrag recovers capacity under overload.** +2.64 ± 2.12 pp allocation
   over Volcano-style binpack in the Helios gang backtest at 1.5× load.
-- **Negative results, reported.** gpupack loses to FGD with slack capacity
+- **Negative results, reported.** gpudefrag loses to FGD with slack capacity
   (load 0.9) and does not beat binpack on gang workloads. Both are diagnosed
   in RESULTS.md, with planned fixes.
 
 ## Reproduce
 
-Requirements: Go ≥ 1.24, [uv](https://docs.astral.sh/uv/), about 10 cores.
+Requirements: Go ≥ 1.25, [uv](https://docs.astral.sh/uv/), about 10 cores.
 
 ```bash
 make data      # fetch traces (checksum-pinned): Alibaba openb, FGD reference curves, Helios
@@ -67,7 +67,7 @@ make suite2    # Helios Venus gang-training backtest with topology domains
                     └─ mip.Placer:  FGD hint ─► candidates ─► patterns
                          │            (exact frag per node subset)   │
                          ▼                                           │
-                 gRPC (proto/gpupack/v1/solver.proto) ───────────────┘
+                 gRPC (proto/gpudefrag/v1/solver.proto) ───────────────┘
                          ▼
                  Python solver service (OR-Tools CP-SAT)
                    Place:  pick one pattern per node, each pod at most once,
@@ -124,7 +124,7 @@ The design decisions that matter:
 | `mip/` | solver client: placer, pattern generation, defragmenter, validation |
 | `calib/` | FGD-protocol runner and calibration gate |
 | `solver/` | Python CP-SAT service (`uv run pytest` for its tests) |
-| `cmd/gpupack-sim` | `calib`, `suite1a`, `suite1b`, `suite2` |
+| `cmd/gpudefrag-sim` | `calib`, `suite1a`, `suite1b`, `suite2` |
 
 ## License and attribution
 

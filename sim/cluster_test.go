@@ -4,7 +4,7 @@ import (
 	"reflect"
 	"testing"
 
-	"gpupack/model"
+	"github.com/santhosh-svg-kum/gpudefrag/model"
 )
 
 func cluster() *Cluster {

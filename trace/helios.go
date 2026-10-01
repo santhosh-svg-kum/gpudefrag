@@ -5,7 +5,7 @@ import (
 	"sort"
 	"time"
 
-	"gpupack/model"
+	"github.com/santhosh-svg-kum/gpudefrag/model"
 )
 
 // HeliosStats counts rows dropped while loading a Helios trace.

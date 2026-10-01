@@ -52,7 +52,7 @@
   - Binpack node order (most allocated first).
   - A gang tries each feasible domain in binpack order.
 - **FGD-gang:** the same loop, with nodes chosen by FGD score.
-- **gpupack:**
+- **gpudefrag:**
   - The pattern model gains gangs. A pod is covered exactly `a[j]` times.
     Pattern `u` containing a gang pod on node n implies `d[j, dom(n)]`, and
     `Σ_D d[j,D] = a[j]`.
@@ -72,7 +72,7 @@
   rejected.
 
 ## README
-- What gpupack is and the claims, with numbers taken from the reports.
+- What gpudefrag is and the claims, with numbers taken from the reports.
 - How to reproduce: `make data calib suite1a suite1b suite2`.
 - Architecture diagram (ASCII), design notes, limitations, license and
   attribution.

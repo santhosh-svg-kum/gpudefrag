@@ -12,7 +12,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 
-	pb "gpupack/proto/gpupack/v1"
+	pb "github.com/santhosh-svg-kum/gpudefrag/proto/gpudefrag/v1"
 )
 
 // Client is a gRPC connection to a solver service.
@@ -37,7 +37,7 @@ func (c *Client) Close() error { return c.conn.Close() }
 // free port and returns its address and a stop function.
 func StartLocal(ctx context.Context, solverDir string) (string, func(), error) {
 	ctx, cancel := context.WithCancel(ctx)
-	cmd := exec.CommandContext(ctx, "uv", "run", "--project", solverDir, "python", "-m", "gpupack_solver.server", "--port", "0", "--threads", "16")
+	cmd := exec.CommandContext(ctx, "uv", "run", "--project", solverDir, "python", "-m", "gpudefrag_solver.server", "--port", "0", "--threads", "16")
 	// uv starts python as a child; run both in their own process group so
 	// stop() can kill the whole group instead of orphaning the server.
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}

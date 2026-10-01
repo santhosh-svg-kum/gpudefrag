@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"gpupack/model"
+	"github.com/santhosh-svg-kum/gpudefrag/model"
 )
 
 func pods(spec ...any) []model.Pod {

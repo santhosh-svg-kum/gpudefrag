@@ -1,6 +1,6 @@
-"""gRPC server for the gpupack solver.
+"""gRPC server for the gpudefrag solver.
 
-    uv run python -m gpupack_solver.server --port 50051   (0 = pick a free port)
+    uv run python -m gpudefrag_solver.server --port 50051   (0 = pick a free port)
 
 Prints "LISTENING <port>" on stdout once ready.
 """
@@ -10,8 +10,8 @@ from concurrent import futures
 
 import grpc
 
-from .pb.gpupack.v1 import solver_pb2 as pb
-from .pb.gpupack.v1 import solver_pb2_grpc as pbg
+from .pb.gpudefrag.v1 import solver_pb2 as pb
+from .pb.gpudefrag.v1 import solver_pb2_grpc as pbg
 from .place import solve_place
 
 VERSION = "0.1.0"

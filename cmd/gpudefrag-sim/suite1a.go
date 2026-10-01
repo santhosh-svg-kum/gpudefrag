@@ -16,14 +16,14 @@ import (
 	"sync"
 	"time"
 
-	"gpupack/calib"
-	"gpupack/mip"
-	"gpupack/model"
-	"gpupack/trace"
-	"gpupack/workload"
+	"github.com/santhosh-svg-kum/gpudefrag/calib"
+	"github.com/santhosh-svg-kum/gpudefrag/mip"
+	"github.com/santhosh-svg-kum/gpudefrag/model"
+	"github.com/santhosh-svg-kum/gpudefrag/trace"
+	"github.com/santhosh-svg-kum/gpudefrag/workload"
 )
 
-// variant is a baseline name or "gpupack:b=<batch>:t=<time limit>[:k=<cands>]".
+// variant is a baseline name or "gpudefrag:b=<batch>:t=<time limit>[:k=<cands>]".
 type variant struct {
 	Name  string
 	Batch int
@@ -35,7 +35,7 @@ type variant struct {
 func parseVariant(s string) (variant, error) {
 	parts := strings.Split(s, ":")
 	v := variant{Name: s, Batch: 1}
-	if parts[0] != "gpupack" {
+	if parts[0] != "gpudefrag" {
 		return v, nil
 	}
 	v.Batch, v.Limit, v.K = 16, 500*time.Millisecond, 16
@@ -81,7 +81,7 @@ func runSuite1a(args []string) error {
 	fs := flag.NewFlagSet("suite1a", flag.ExitOnError)
 	data := fs.String("data", "data", "data directory")
 	out := fs.String("out", "results/suite1a", "output directory")
-	variants := fs.String("variants", "FGD,BestFit,gpupack:b=1:t=500ms,gpupack:b=16:t=500ms", "comma-separated variants")
+	variants := fs.String("variants", "FGD,BestFit,gpudefrag:b=1:t=500ms,gpudefrag:b=16:t=500ms", "comma-separated variants")
 	seedLo := fs.Int64("seed-from", 42, "first seed")
 	seedHi := fs.Int64("seed-to", 51, "last seed")
 	parallel := fs.Int("parallel", 5, "concurrent runs")
@@ -110,7 +110,7 @@ func runSuite1a(args []string) error {
 			return err
 		}
 		vs = append(vs, v)
-		needSolver = needSolver || strings.HasPrefix(s, "gpupack")
+		needSolver = needSolver || strings.HasPrefix(s, "gpudefrag")
 	}
 	var client *mip.Client
 	if needSolver {
@@ -146,7 +146,7 @@ func runSuite1a(args []string) error {
 				t0 := time.Now()
 				cfg := calib.RunConfig{Nodes: nodes, Pods: pods, Policy: j.v.Name, Seed: j.seed, Ratio: 1.3}
 				var pl *mip.Placer
-				if strings.HasPrefix(j.v.Name, "gpupack") {
+				if strings.HasPrefix(j.v.Name, "gpudefrag") {
 					pl = &mip.Placer{Solver: client, Typical: typical, K: j.v.K, TimeLimit: j.v.Limit, Deterministic: true, Workers: cpWorkers, IdleWeight: j.v.Idle}
 					cfg.Placer, cfg.Batch = pl, j.v.Batch
 				}

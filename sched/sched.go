@@ -7,9 +7,9 @@ import (
 	"fmt"
 	"math/rand"
 
-	"gpupack/frag"
-	"gpupack/model"
-	"gpupack/sim"
+	"github.com/santhosh-svg-kum/gpudefrag/frag"
+	"github.com/santhosh-svg-kum/gpudefrag/model"
+	"github.com/santhosh-svg-kum/gpudefrag/sim"
 )
 
 const (

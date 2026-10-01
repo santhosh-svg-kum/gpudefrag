@@ -1,4 +1,4 @@
-// Package mip is gpupack's solver-backed scheduler. It warm-starts the solver
+// Package mip is gpudefrag's solver-backed scheduler. It warm-starts the solver
 // with FGD's own placement, validates every answer against the cluster, and
 // keeps the better of the two by the exact (Go-evaluated) objective, so it is
 // never worse than FGD on a batch.
@@ -11,11 +11,11 @@ import (
 
 	"google.golang.org/grpc"
 
-	"gpupack/frag"
-	"gpupack/model"
-	pb "gpupack/proto/gpupack/v1"
-	"gpupack/sched"
-	"gpupack/sim"
+	"github.com/santhosh-svg-kum/gpudefrag/frag"
+	"github.com/santhosh-svg-kum/gpudefrag/model"
+	pb "github.com/santhosh-svg-kum/gpudefrag/proto/gpudefrag/v1"
+	"github.com/santhosh-svg-kum/gpudefrag/sched"
+	"github.com/santhosh-svg-kum/gpudefrag/sim"
 )
 
 // Solver is the subset of the gRPC client the placer needs (fakeable).

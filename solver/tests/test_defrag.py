@@ -1,8 +1,8 @@
 """Tests for the demand-driven defrag model."""
 import itertools
 
-from gpupack_solver.defrag import solve_defrag
-from gpupack_solver.pb.gpupack.v1 import solver_pb2 as pb
+from gpudefrag_solver.defrag import solve_defrag
+from gpudefrag_solver.pb.gpudefrag.v1 import solver_pb2 as pb
 
 
 def node(i, gpus, cpu=64000):

@@ -9,9 +9,9 @@ import (
 	"math"
 	"math/rand"
 
-	"gpupack/frag"
-	"gpupack/model"
-	"gpupack/sim"
+	"github.com/santhosh-svg-kum/gpudefrag/frag"
+	"github.com/santhosh-svg-kum/gpudefrag/model"
+	"github.com/santhosh-svg-kum/gpudefrag/sim"
 )
 
 func scoreEach(c *sim.Cluster, idx []int, f func(n *model.NodeRes) int64) []int64 {

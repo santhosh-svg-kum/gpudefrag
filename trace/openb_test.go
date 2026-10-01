@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"gpupack/model"
+	"github.com/santhosh-svg-kum/gpudefrag/model"
 )
 
 func TestLoadOpenbNodes(t *testing.T) {

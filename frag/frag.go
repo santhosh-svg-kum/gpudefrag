@@ -6,7 +6,7 @@
 // drawn from the "typical pods" distribution could not use.
 package frag
 
-import "gpupack/model"
+import "github.com/santhosh-svg-kum/gpudefrag/model"
 
 // Kind classifies a (node, typical pod) pair, as in FGD's FragRatioDataMap.
 type Kind int

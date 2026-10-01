@@ -32,7 +32,7 @@ Results are reported separately from suite 1a, never averaged with it.
   - Binds are revalidated at apply time. A failed bind is requeued at the
     head of the queue and increments `bind_conflicts`.
 - **Policies:** baselines decide pod-by-pod within a session (up to B pods).
-  gpupack decides the batch via `mip.Placer`.
+  gpudefrag decides the batch via `mip.Placer`.
 - **Completion:** at `start + remaining`. An evicted pod's remaining work grows
   by the lost work since its last checkpoint, plus `restart_s`.
 - **Metrics:**
@@ -73,8 +73,8 @@ Results are reported separately from suite 1a, never averaged with it.
 - **Go validation:** replay the moves on a scratch cluster. Invalid output or
   failed hysteresis means no plan, and is counted.
 
-## Suite 1b (`gpupack-sim suite1b`)
-- **Variants:** FGD, BestFit, gpupack (B=16), FGD+defrag, gpupack+defrag.
+## Suite 1b (`gpudefrag-sim suite1b`)
+- **Variants:** FGD, BestFit, gpudefrag (B=16), FGD+defrag, gpudefrag+defrag.
 - 10 seeds per load; mean ± 95% CI; `report.md`.
 
 ## Tests

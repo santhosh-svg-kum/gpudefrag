@@ -3,9 +3,9 @@ import itertools
 
 from hypothesis import given, settings, strategies as st
 
-from gpupack_solver.frag import Class, NodeState, node_frag
-from gpupack_solver.pb.gpupack.v1 import solver_pb2 as pb
-from gpupack_solver.place import solve_place
+from gpudefrag_solver.frag import Class, NodeState, node_frag
+from gpudefrag_solver.pb.gpudefrag.v1 import solver_pb2 as pb
+from gpudefrag_solver.place import solve_place
 
 CLASSES = [
     pb.TypicalClass(cpu=1000, gpu_milli=500, gpu_num=1, pct=0.5),

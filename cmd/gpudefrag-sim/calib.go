@@ -13,9 +13,9 @@ import (
 	"sync"
 	"time"
 
-	"gpupack/calib"
-	"gpupack/sched"
-	"gpupack/trace"
+	"github.com/santhosh-svg-kum/gpudefrag/calib"
+	"github.com/santhosh-svg-kum/gpudefrag/sched"
+	"github.com/santhosh-svg-kum/gpudefrag/trace"
 )
 
 func runCalib(args []string) error {

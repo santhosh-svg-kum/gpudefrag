@@ -14,12 +14,12 @@ import (
 	"sync"
 	"time"
 
-	"gpupack/mip"
-	"gpupack/model"
-	"gpupack/sched"
-	"gpupack/timed"
-	"gpupack/trace"
-	"gpupack/workload"
+	"github.com/santhosh-svg-kum/gpudefrag/mip"
+	"github.com/santhosh-svg-kum/gpudefrag/model"
+	"github.com/santhosh-svg-kum/gpudefrag/sched"
+	"github.com/santhosh-svg-kum/gpudefrag/timed"
+	"github.com/santhosh-svg-kum/gpudefrag/trace"
+	"github.com/santhosh-svg-kum/gpudefrag/workload"
 )
 
 const day = 86400.0
@@ -99,14 +99,14 @@ func runSuite2(args []string) error {
 	data := fs.String("data", "data", "data directory")
 	out := fs.String("out", "results/suite2", "output directory")
 	cluster := fs.String("cluster", "Venus", "Helios cluster")
-	variants := fs.String("variants", "Binpack,FGD,gpupack,Binpack+defrag,gpupack+defrag", "comma-separated variants")
+	variants := fs.String("variants", "Binpack,FGD,gpudefrag,Binpack+defrag,gpudefrag+defrag", "comma-separated variants")
 	compress := fs.String("compress", "1.0,1.25,1.5", "time-compression factors (load growth)")
 	windows := fs.Int("windows", 4, "busiest non-overlapping weeks to replay")
 	domainSize := fs.Int("domain", 4, "nodes per topology domain; gangs up to this many pods stay in one domain")
 	batch := fs.Int("batch", 16, "jobs per scheduling session")
-	limit := fs.Duration("time", 500*time.Millisecond, "gpupack solver budget per batch")
-	objW := fs.Float64("obj-gpu-weight", 1, "gpupack objective: GPU weight for typical classes (FGD gpuResWeight); 0 = FGD's count weighting")
-	idle := fs.Float64("idle-weight", -1, "gpupack penalty (milli-GPU) for opening an idle node; <0 lexicographic, 0 off")
+	limit := fs.Duration("time", 500*time.Millisecond, "gpudefrag solver budget per batch")
+	objW := fs.Float64("obj-gpu-weight", 1, "gpudefrag objective: GPU weight for typical classes (FGD gpuResWeight); 0 = FGD's count weighting")
+	idle := fs.Float64("idle-weight", -1, "gpudefrag penalty (milli-GPU) for opening an idle node; <0 lexicographic, 0 off")
 	parallel := fs.Int("parallel", 4, "concurrent runs")
 	solverDir := fs.String("solver-dir", "solver", "python solver project")
 	addr := fs.String("solver", "", "solver address (default: start one locally)")
@@ -136,7 +136,7 @@ func runSuite2(args []string) error {
 	starts := busiestWeeks(all, *windows, warm)
 
 	var client *mip.Client
-	if strings.Contains(*variants, "gpupack") || strings.Contains(*variants, "defrag") {
+	if strings.Contains(*variants, "gpudefrag") || strings.Contains(*variants, "defrag") {
 		if *addr == "" {
 			a, stop, err := mip.StartLocal(context.Background(), *solverDir)
 			if err != nil {
@@ -179,7 +179,7 @@ func runSuite2(args []string) error {
 					MeasureFrom: warm / j.c, DrainLimit: 1}
 				name, defrag := strings.CutSuffix(j.variant, "+defrag")
 				var pl *mip.Placer
-				if name == "gpupack" {
+				if name == "gpudefrag" {
 					pl = &mip.Placer{Solver: client, Typical: typical, K: 16, TimeLimit: *limit, Deterministic: true, Workers: cpWorkers, IdleWeight: *idle, ObjectiveTypical: objTypical}
 					cfg.Decider = pl
 				} else {

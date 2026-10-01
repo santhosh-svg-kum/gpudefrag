@@ -3,7 +3,7 @@
 import grpc
 import warnings
 
-from . import solver_pb2 as gpupack_dot_v1_dot_solver__pb2
+from . import solver_pb2 as gpudefrag_dot_v1_dot_solver__pb2
 
 GRPC_GENERATED_VERSION = '1.81.1'
 GRPC_VERSION = grpc.__version__
@@ -18,7 +18,7 @@ except ImportError:
 if _version_not_supported:
     raise RuntimeError(
         f'The grpc package installed is at version {GRPC_VERSION},'
-        + ' but the generated code in gpupack/v1/solver_pb2_grpc.py depends on'
+        + ' but the generated code in gpudefrag/v1/solver_pb2_grpc.py depends on'
         + f' grpcio>={GRPC_GENERATED_VERSION}.'
         + f' Please upgrade your grpc module to grpcio>={GRPC_GENERATED_VERSION}'
         + f' or downgrade your generated code using grpcio-tools<={GRPC_VERSION}.'
@@ -35,19 +35,19 @@ class SolverStub:
             channel: A grpc.Channel.
         """
         self.Place = channel.unary_unary(
-                '/gpupack.v1.Solver/Place',
-                request_serializer=gpupack_dot_v1_dot_solver__pb2.PlaceRequest.SerializeToString,
-                response_deserializer=gpupack_dot_v1_dot_solver__pb2.PlaceResponse.FromString,
+                '/gpudefrag.v1.Solver/Place',
+                request_serializer=gpudefrag_dot_v1_dot_solver__pb2.PlaceRequest.SerializeToString,
+                response_deserializer=gpudefrag_dot_v1_dot_solver__pb2.PlaceResponse.FromString,
                 _registered_method=True)
         self.Defrag = channel.unary_unary(
-                '/gpupack.v1.Solver/Defrag',
-                request_serializer=gpupack_dot_v1_dot_solver__pb2.DefragRequest.SerializeToString,
-                response_deserializer=gpupack_dot_v1_dot_solver__pb2.DefragResponse.FromString,
+                '/gpudefrag.v1.Solver/Defrag',
+                request_serializer=gpudefrag_dot_v1_dot_solver__pb2.DefragRequest.SerializeToString,
+                response_deserializer=gpudefrag_dot_v1_dot_solver__pb2.DefragResponse.FromString,
                 _registered_method=True)
         self.Health = channel.unary_unary(
-                '/gpupack.v1.Solver/Health',
-                request_serializer=gpupack_dot_v1_dot_solver__pb2.HealthRequest.SerializeToString,
-                response_deserializer=gpupack_dot_v1_dot_solver__pb2.HealthResponse.FromString,
+                '/gpudefrag.v1.Solver/Health',
+                request_serializer=gpudefrag_dot_v1_dot_solver__pb2.HealthRequest.SerializeToString,
+                response_deserializer=gpudefrag_dot_v1_dot_solver__pb2.HealthResponse.FromString,
                 _registered_method=True)
 
 
@@ -77,24 +77,24 @@ def add_SolverServicer_to_server(servicer, server):
     rpc_method_handlers = {
             'Place': grpc.unary_unary_rpc_method_handler(
                     servicer.Place,
-                    request_deserializer=gpupack_dot_v1_dot_solver__pb2.PlaceRequest.FromString,
-                    response_serializer=gpupack_dot_v1_dot_solver__pb2.PlaceResponse.SerializeToString,
+                    request_deserializer=gpudefrag_dot_v1_dot_solver__pb2.PlaceRequest.FromString,
+                    response_serializer=gpudefrag_dot_v1_dot_solver__pb2.PlaceResponse.SerializeToString,
             ),
             'Defrag': grpc.unary_unary_rpc_method_handler(
                     servicer.Defrag,
-                    request_deserializer=gpupack_dot_v1_dot_solver__pb2.DefragRequest.FromString,
-                    response_serializer=gpupack_dot_v1_dot_solver__pb2.DefragResponse.SerializeToString,
+                    request_deserializer=gpudefrag_dot_v1_dot_solver__pb2.DefragRequest.FromString,
+                    response_serializer=gpudefrag_dot_v1_dot_solver__pb2.DefragResponse.SerializeToString,
             ),
             'Health': grpc.unary_unary_rpc_method_handler(
                     servicer.Health,
-                    request_deserializer=gpupack_dot_v1_dot_solver__pb2.HealthRequest.FromString,
-                    response_serializer=gpupack_dot_v1_dot_solver__pb2.HealthResponse.SerializeToString,
+                    request_deserializer=gpudefrag_dot_v1_dot_solver__pb2.HealthRequest.FromString,
+                    response_serializer=gpudefrag_dot_v1_dot_solver__pb2.HealthResponse.SerializeToString,
             ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
-            'gpupack.v1.Solver', rpc_method_handlers)
+            'gpudefrag.v1.Solver', rpc_method_handlers)
     server.add_generic_rpc_handlers((generic_handler,))
-    server.add_registered_method_handlers('gpupack.v1.Solver', rpc_method_handlers)
+    server.add_registered_method_handlers('gpudefrag.v1.Solver', rpc_method_handlers)
 
 
  # This class is part of an EXPERIMENTAL API.
@@ -115,9 +115,9 @@ class Solver:
         return grpc.experimental.unary_unary(
             request,
             target,
-            '/gpupack.v1.Solver/Place',
-            gpupack_dot_v1_dot_solver__pb2.PlaceRequest.SerializeToString,
-            gpupack_dot_v1_dot_solver__pb2.PlaceResponse.FromString,
+            '/gpudefrag.v1.Solver/Place',
+            gpudefrag_dot_v1_dot_solver__pb2.PlaceRequest.SerializeToString,
+            gpudefrag_dot_v1_dot_solver__pb2.PlaceResponse.FromString,
             options,
             channel_credentials,
             insecure,
@@ -142,9 +142,9 @@ class Solver:
         return grpc.experimental.unary_unary(
             request,
             target,
-            '/gpupack.v1.Solver/Defrag',
-            gpupack_dot_v1_dot_solver__pb2.DefragRequest.SerializeToString,
-            gpupack_dot_v1_dot_solver__pb2.DefragResponse.FromString,
+            '/gpudefrag.v1.Solver/Defrag',
+            gpudefrag_dot_v1_dot_solver__pb2.DefragRequest.SerializeToString,
+            gpudefrag_dot_v1_dot_solver__pb2.DefragResponse.FromString,
             options,
             channel_credentials,
             insecure,
@@ -169,9 +169,9 @@ class Solver:
         return grpc.experimental.unary_unary(
             request,
             target,
-            '/gpupack.v1.Solver/Health',
-            gpupack_dot_v1_dot_solver__pb2.HealthRequest.SerializeToString,
-            gpupack_dot_v1_dot_solver__pb2.HealthResponse.FromString,
+            '/gpudefrag.v1.Solver/Health',
+            gpudefrag_dot_v1_dot_solver__pb2.HealthRequest.SerializeToString,
+            gpudefrag_dot_v1_dot_solver__pb2.HealthResponse.FromString,
             options,
             channel_credentials,
             insecure,

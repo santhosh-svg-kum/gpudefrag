@@ -9,10 +9,10 @@ import (
 
 	"google.golang.org/grpc"
 
-	"gpupack/frag"
-	"gpupack/model"
-	pb "gpupack/proto/gpupack/v1"
-	"gpupack/sim"
+	"github.com/santhosh-svg-kum/gpudefrag/frag"
+	"github.com/santhosh-svg-kum/gpudefrag/model"
+	pb "github.com/santhosh-svg-kum/gpudefrag/proto/gpudefrag/v1"
+	"github.com/santhosh-svg-kum/gpudefrag/sim"
 )
 
 type fakeSolver struct {

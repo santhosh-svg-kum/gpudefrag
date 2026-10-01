@@ -5,8 +5,8 @@ package sim
 import (
 	"fmt"
 
-	"gpupack/frag"
-	"gpupack/model"
+	"github.com/santhosh-svg-kum/gpudefrag/frag"
+	"github.com/santhosh-svg-kum/gpudefrag/model"
 )
 
 // Cluster is the mutable state of one simulation run.

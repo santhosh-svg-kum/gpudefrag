@@ -1,6 +1,6 @@
-module gpupack
+module github.com/santhosh-svg-kum/gpudefrag
 
-go 1.27.1
+go 1.25.0
 
 require (
 	google.golang.org/grpc v1.84.0

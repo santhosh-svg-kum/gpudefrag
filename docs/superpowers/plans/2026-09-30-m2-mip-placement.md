@@ -45,8 +45,8 @@ solution).
 - `StartLocal()` spawns the Python server via `uv run`, on a free port.
 
 ## Suite 1a harness
-- `gpupack-sim suite1a` runs the same seeds and protocol as calib.
-- Policy `gpupack` places in batches of B consecutive arrivals.
+- `gpudefrag-sim suite1a` runs the same seeds and protocol as calib.
+- Policy `gpudefrag` places in batches of B consecutive arrivals.
 - Samples are taken at the end of each batch.
 - Outputs per-seed curves, seed-mean ± 95% CI, failed pods, and solve-time
   p50/p99, plus `report.md`. Reported variants:

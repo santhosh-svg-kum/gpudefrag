@@ -1,6 +1,6 @@
-// Command gpupack-sim runs gpupack experiments.
+// Command gpudefrag-sim runs gpudefrag experiments.
 //
-//	gpupack-sim calib -data data -out results/calib
+//	gpudefrag-sim calib -data data -out results/calib
 package main
 
 import (
@@ -32,6 +32,6 @@ func main() {
 }
 
 func usage() {
-	fmt.Fprintln(os.Stderr, "usage: gpupack-sim calib|suite1a|suite1b|suite2 [flags]")
+	fmt.Fprintln(os.Stderr, "usage: gpudefrag-sim calib|suite1a|suite1b|suite2 [flags]")
 	os.Exit(2)
 }

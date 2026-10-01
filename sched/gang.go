@@ -4,8 +4,8 @@ import (
 	"math/rand"
 	"sort"
 
-	"gpupack/model"
-	"gpupack/sim"
+	"github.com/santhosh-svg-kum/gpudefrag/model"
+	"github.com/santhosh-svg-kum/gpudefrag/sim"
 )
 
 // Binpack is Volcano's binpack plugin with equal CPU and GPU weights: prefer

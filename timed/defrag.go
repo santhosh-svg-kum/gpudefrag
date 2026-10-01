@@ -4,9 +4,9 @@ import (
 	"math"
 	"math/rand"
 
-	"gpupack/mip"
-	"gpupack/model"
-	"gpupack/sim"
+	"github.com/santhosh-svg-kum/gpudefrag/mip"
+	"github.com/santhosh-svg-kum/gpudefrag/model"
+	"github.com/santhosh-svg-kum/gpudefrag/sim"
 )
 
 // Planner finds migrations that unblock a pending pod (mip.Defragmenter).

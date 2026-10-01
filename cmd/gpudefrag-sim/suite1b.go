@@ -15,12 +15,12 @@ import (
 	"sync"
 	"time"
 
-	"gpupack/mip"
-	"gpupack/model"
-	"gpupack/sched"
-	"gpupack/timed"
-	"gpupack/trace"
-	"gpupack/workload"
+	"github.com/santhosh-svg-kum/gpudefrag/mip"
+	"github.com/santhosh-svg-kum/gpudefrag/model"
+	"github.com/santhosh-svg-kum/gpudefrag/sched"
+	"github.com/santhosh-svg-kum/gpudefrag/timed"
+	"github.com/santhosh-svg-kum/gpudefrag/trace"
+	"github.com/santhosh-svg-kum/gpudefrag/workload"
 )
 
 type run1b struct {
@@ -48,7 +48,7 @@ func runSuite1b(args []string) error {
 	fs := flag.NewFlagSet("suite1b", flag.ExitOnError)
 	data := fs.String("data", "data", "data directory")
 	out := fs.String("out", "results/suite1b", "output directory")
-	variants := fs.String("variants", "FGD,BestFit,gpupack,FGD+defrag,gpupack+defrag", "comma-separated variants")
+	variants := fs.String("variants", "FGD,BestFit,gpudefrag,FGD+defrag,gpudefrag+defrag", "comma-separated variants")
 	loads := fs.String("loads", "0.9,1.0,1.1", "offered GPU loads")
 	frac := fs.Float64("cluster-frac", 0.125, "stratified fraction of openb nodes to simulate")
 	maxDur := fs.Duration("max-dur", 2*time.Hour, "cap on job durations")
@@ -57,9 +57,9 @@ func runSuite1b(args []string) error {
 	seedLo := fs.Int64("seed-from", 42, "first seed")
 	seedHi := fs.Int64("seed-to", 46, "last seed")
 	batch := fs.Int("batch", 16, "pods per scheduling session")
-	limit := fs.Duration("time", 500*time.Millisecond, "gpupack solver budget per batch")
-	objW := fs.Float64("obj-gpu-weight", 1, "gpupack objective: GPU weight for typical classes (FGD gpuResWeight); 0 = FGD's count weighting")
-	idle := fs.Float64("idle-weight", -1, "gpupack penalty (milli-GPU) for opening an idle node; <0 lexicographic, 0 off")
+	limit := fs.Duration("time", 500*time.Millisecond, "gpudefrag solver budget per batch")
+	objW := fs.Float64("obj-gpu-weight", 1, "gpudefrag objective: GPU weight for typical classes (FGD gpuResWeight); 0 = FGD's count weighting")
+	idle := fs.Float64("idle-weight", -1, "gpudefrag penalty (milli-GPU) for opening an idle node; <0 lexicographic, 0 off")
 	parallel := fs.Int("parallel", 5, "concurrent runs")
 	solverDir := fs.String("solver-dir", "solver", "python solver project")
 	addr := fs.String("solver", "", "solver address (default: start one locally)")
@@ -86,7 +86,7 @@ func runSuite1b(args []string) error {
 	}
 
 	var client *mip.Client
-	if strings.Contains(*variants, "gpupack") || strings.Contains(*variants, "defrag") {
+	if strings.Contains(*variants, "gpudefrag") || strings.Contains(*variants, "defrag") {
 		if *addr == "" {
 			a, stop, err := mip.StartLocal(context.Background(), *solverDir)
 			if err != nil {
@@ -124,7 +124,7 @@ func runSuite1b(args []string) error {
 				name, defrag := strings.CutSuffix(j.variant, "+defrag")
 				var pl *mip.Placer
 				switch name {
-				case "gpupack":
+				case "gpudefrag":
 					pl = &mip.Placer{Solver: client, Typical: typical, K: 16, TimeLimit: *limit, Deterministic: true, Workers: cpWorkers, IdleWeight: *idle, ObjectiveTypical: objTypical}
 					cfg.Decider = pl
 				default:

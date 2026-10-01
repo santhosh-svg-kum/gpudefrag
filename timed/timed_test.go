@@ -8,11 +8,11 @@ import (
 	"testing"
 	"time"
 
-	"gpupack/mip"
-	"gpupack/model"
-	"gpupack/sched"
-	"gpupack/sim"
-	"gpupack/trace"
+	"github.com/santhosh-svg-kum/gpudefrag/mip"
+	"github.com/santhosh-svg-kum/gpudefrag/model"
+	"github.com/santhosh-svg-kum/gpudefrag/sched"
+	"github.com/santhosh-svg-kum/gpudefrag/sim"
+	"github.com/santhosh-svg-kum/gpudefrag/trace"
 )
 
 func gpuJob(name string, arrive, dur float64, milli int64) trace.Job {

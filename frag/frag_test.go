@@ -4,7 +4,7 @@ import (
 	"math"
 	"testing"
 
-	"gpupack/model"
+	"github.com/santhosh-svg-kum/gpudefrag/model"
 )
 
 // fgdTypicalPods is TestingGenerateGetTypicalPods from FGD's pkg/utils/frag_test.go.

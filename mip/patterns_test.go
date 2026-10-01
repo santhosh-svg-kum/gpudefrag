@@ -3,9 +3,9 @@ package mip
 import (
 	"testing"
 
-	"gpupack/frag"
-	"gpupack/model"
-	"gpupack/sim"
+	"github.com/santhosh-svg-kum/gpudefrag/frag"
+	"github.com/santhosh-svg-kum/gpudefrag/model"
+	"github.com/santhosh-svg-kum/gpudefrag/sim"
 )
 
 func patternFixture() (*sim.Cluster, []model.Pod, []frag.TargetPod) {
