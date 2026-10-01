@@ -170,3 +170,22 @@ func TestGangRealSolver(t *testing.T) {
 		t.Fatalf("real solver answer should validate: %v", pl.Stats.Fallbacks)
 	}
 }
+
+func TestStartLocalStopLeavesNoServer(t *testing.T) {
+	if _, err := exec.LookPath("uv"); err != nil {
+		t.Skip("uv not installed")
+	}
+	addr, stop, err := StartLocal(context.Background(), "../solver")
+	if err != nil {
+		t.Fatal(err)
+	}
+	stop()
+	time.Sleep(500 * time.Millisecond)
+	cl, _ := Dial(addr)
+	defer cl.Close()
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	if _, err := cl.Health(ctx, &pb.HealthRequest{}); err == nil {
+		t.Fatal("solver still answering after stop()")
+	}
+}

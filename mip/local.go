@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os/exec"
 	"strings"
+	"syscall"
 	"time"
 
 	"google.golang.org/grpc"
@@ -37,6 +38,10 @@ func (c *Client) Close() error { return c.conn.Close() }
 func StartLocal(ctx context.Context, solverDir string) (string, func(), error) {
 	ctx, cancel := context.WithCancel(ctx)
 	cmd := exec.CommandContext(ctx, "uv", "run", "--project", solverDir, "python", "-m", "gpupack_solver.server", "--port", "0", "--threads", "16")
+	// uv starts python as a child; run both in their own process group so
+	// stop() can kill the whole group instead of orphaning the server.
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	cmd.Cancel = func() error { return syscall.Kill(-cmd.Process.Pid, syscall.SIGTERM) }
 	out, err := cmd.StdoutPipe()
 	if err != nil {
 		cancel()
