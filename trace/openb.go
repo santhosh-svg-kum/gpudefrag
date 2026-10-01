@@ -138,3 +138,33 @@ func firstErr(errs ...error) error {
 	}
 	return nil
 }
+
+// Job is a pod with a run duration (seconds) and, once synthesized, an
+// arrival time (seconds from the start of the run).
+type Job struct {
+	Pod      model.Pod
+	Arrive   float64
+	Duration float64
+}
+
+// LoadOpenbJobs is LoadOpenbPods plus duration = deletion_time - creation_time.
+func LoadOpenbJobs(path string) ([]Job, error) {
+	pods, err := LoadOpenbPods(path)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := readCSV(path)
+	if err != nil {
+		return nil, err
+	}
+	jobs := make([]Job, len(pods))
+	for i, r := range rows {
+		c, e1 := r.int("creation_time")
+		d, e2 := r.int("deletion_time")
+		if err := firstErr(e1, e2); err != nil {
+			return nil, err
+		}
+		jobs[i] = Job{Pod: pods[i], Duration: float64(d - c)}
+	}
+	return jobs, nil
+}

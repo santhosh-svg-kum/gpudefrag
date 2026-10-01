@@ -90,3 +90,16 @@ func TestRealOpenbData(t *testing.T) {
 		t.Fatalf("pods=%d", len(pods))
 	}
 }
+
+func TestLoadOpenbJobsDurations(t *testing.T) {
+	jobs, err := LoadOpenbJobs("testdata/pods.csv")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(jobs) != 5 || jobs[0].Duration != 12537496 || jobs[2].Duration != 5 {
+		t.Fatalf("%+v", jobs)
+	}
+	if jobs[1].Pod.Res.GpuMilli != 460 {
+		t.Fatal("pod resources must match LoadOpenbPods")
+	}
+}
