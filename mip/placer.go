@@ -51,8 +51,27 @@ type choice struct {
 	gpus []int
 }
 
+// Choice is a decided placement for one pod of a batch.
+type Choice struct {
+	Node int
+	GPUs []int
+}
+
 // PlaceBatch places pods (in order) onto c and reports which were placed.
 func (pl *Placer) PlaceBatch(c *sim.Cluster, pods []model.Pod) []bool {
+	dec := pl.Decide(c, pods)
+	placed := make([]bool, len(pods))
+	for i, ch := range dec {
+		if ch != nil {
+			c.Bind(ch.Node, pods[i].Res, ch.GPUs)
+			placed[i] = true
+		}
+	}
+	return placed
+}
+
+// Decide chooses placements for pods without changing c (nil = not placed).
+func (pl *Placer) Decide(c *sim.Cluster, pods []model.Pod) []*Choice {
 	pl.Stats.Batches++
 	if pl.Stats.Fallbacks == nil {
 		pl.Stats.Fallbacks = map[string]int{}
@@ -76,14 +95,13 @@ func (pl *Placer) PlaceBatch(c *sim.Cluster, pods []model.Pod) []bool {
 		pl.Stats.Improved++
 	}
 
-	placed := make([]bool, len(pods))
+	out := make([]*Choice, len(pods))
 	for i, ch := range best {
 		if ch != nil {
-			c.Bind(ch.node, pods[i].Res, ch.gpus)
-			placed[i] = true
+			out[i] = &Choice{Node: ch.node, GPUs: ch.gpus}
 		}
 	}
-	return placed
+	return out
 }
 
 func (pl *Placer) solve(c *sim.Cluster, pods []model.Pod, hint []*choice, fgd sched.FGD) ([]*choice, string) {
