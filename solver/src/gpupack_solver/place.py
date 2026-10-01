@@ -196,8 +196,29 @@ def solve_patterns(req: pb.PlaceRequest) -> pb.PlaceResponse:
             by_pod.setdefault(a.pod, []).append(v)
     for vs in by_node.values():
         m.AddExactlyOne(vs)
-    for vs in by_pod.values():
-        m.AddAtMostOne(vs)
+    gang_of = {p.id: p.gang for p in req.pods if p.gang}
+    admit = {g: m.NewBoolVar(f"a{g}") for g in set(gang_of.values())}
+    for p in req.pods:
+        cover = by_pod.get(p.id, [])
+        if p.gang:
+            m.Add(sum(cover) == admit[p.gang])  # all pods of a gang, or none
+        elif cover:
+            m.AddAtMostOne(cover)
+    # Domain-local gangs: every pattern carrying one of the gang's pods must
+    # sit in the single domain chosen for the gang.
+    domain_of = {n.id: n.domain for n in req.nodes}
+    local = {p.gang for p in req.pods if p.gang and p.domain_local}
+    dom_var = {}
+    for v, pat in zip(u, req.patterns):
+        for a in pat.assignments:
+            g = gang_of.get(a.pod)
+            if g in local:
+                key = (g, domain_of[pat.node])
+                if key not in dom_var:
+                    dom_var[key] = m.NewBoolVar("")
+                m.AddImplication(v, dom_var[key])
+    for g in local:
+        m.Add(sum(dv for (gg, _), dv in dom_var.items() if gg == g) == admit[g])
     placed_c = [sum(weight[a.pod] for a in pat.assignments) for pat in req.patterns]
     frag_c = [round(pat.frag * 1000) for pat in req.patterns]
     # big > any possible total-frag difference, so one more unit of placed

@@ -184,9 +184,10 @@ type Pod struct {
 	Mem           int64                  `protobuf:"varint,3,opt,name=mem,proto3" json:"mem,omitempty"`
 	GpuNum        int32                  `protobuf:"varint,4,opt,name=gpu_num,json=gpuNum,proto3" json:"gpu_num,omitempty"`
 	GpuMilli      int64                  `protobuf:"varint,5,opt,name=gpu_milli,json=gpuMilli,proto3" json:"gpu_milli,omitempty"`
-	Candidates    []int32                `protobuf:"varint,6,rep,packed,name=candidates,proto3" json:"candidates,omitempty"` // node ids the pod may use
-	Weight        int64                  `protobuf:"varint,7,opt,name=weight,proto3" json:"weight,omitempty"`                // value of placing it
-	Gang          int32                  `protobuf:"varint,8,opt,name=gang,proto3" json:"gang,omitempty"`                    // 0 = no gang (M4)
+	Candidates    []int32                `protobuf:"varint,6,rep,packed,name=candidates,proto3" json:"candidates,omitempty"`               // node ids the pod may use
+	Weight        int64                  `protobuf:"varint,7,opt,name=weight,proto3" json:"weight,omitempty"`                              // value of placing it
+	Gang          int32                  `protobuf:"varint,8,opt,name=gang,proto3" json:"gang,omitempty"`                                  // 0 = no gang; pods sharing an id are all-or-nothing
+	DomainLocal   bool                   `protobuf:"varint,9,opt,name=domain_local,json=domainLocal,proto3" json:"domain_local,omitempty"` // gang must stay within one Node.domain
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -275,6 +276,13 @@ func (x *Pod) GetGang() int32 {
 		return x.Gang
 	}
 	return 0
+}
+
+func (x *Pod) GetDomainLocal() bool {
+	if x != nil {
+		return x.DomainLocal
+	}
+	return false
 }
 
 type Assignment struct {
@@ -1035,7 +1043,7 @@ const file_gpupack_v1_solver_proto_rawDesc = "" +
 	"\bmem_left\x18\x03 \x01(\x03R\amemLeft\x12\x19\n" +
 	"\bgpu_left\x18\x04 \x03(\x03R\agpuLeft\x12!\n" +
 	"\fclass_access\x18\x05 \x03(\bR\vclassAccess\x12\x16\n" +
-	"\x06domain\x18\x06 \x01(\tR\x06domain\"\xbb\x01\n" +
+	"\x06domain\x18\x06 \x01(\tR\x06domain\"\xde\x01\n" +
 	"\x03Pod\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x05R\x02id\x12\x10\n" +
 	"\x03cpu\x18\x02 \x01(\x03R\x03cpu\x12\x10\n" +
@@ -1046,7 +1054,8 @@ const file_gpupack_v1_solver_proto_rawDesc = "" +
 	"candidates\x18\x06 \x03(\x05R\n" +
 	"candidates\x12\x16\n" +
 	"\x06weight\x18\a \x01(\x03R\x06weight\x12\x12\n" +
-	"\x04gang\x18\b \x01(\x05R\x04gang\"F\n" +
+	"\x04gang\x18\b \x01(\x05R\x04gang\x12!\n" +
+	"\fdomain_local\x18\t \x01(\bR\vdomainLocal\"F\n" +
 	"\n" +
 	"Assignment\x12\x10\n" +
 	"\x03pod\x18\x01 \x01(\x05R\x03pod\x12\x12\n" +

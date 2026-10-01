@@ -37,7 +37,8 @@ message Pod {
   int64 gpu_milli = 5;
   repeated int32 candidates = 6;  // node ids the pod may use
   int64 weight = 7;               // value of placing it
-  int32 gang = 8;                 // 0 = no gang (M4)
+  int32 gang = 8;                 // 0 = no gang; pods sharing an id are all-or-nothing
+  bool domain_local = 9;          // gang must stay within one Node.domain
 }
 
 message Assignment {
