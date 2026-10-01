@@ -138,3 +138,25 @@ Reading the tables:
 - **Next steps (v1.1):** warm-start from the better of the Binpack and FGD
   placements, and add a gang-aware term (count of free whole nodes per
   domain) to the objective.
+
+## Future work: decision latency
+
+Benchmark solve times are pessimistic: CP-SAT already runs a parallel
+portfolio search, but the benchmarks capped it at `NumCPU / concurrent runs`
+(2 workers) because several simulations shared one machine. Planned
+reductions, in expected payoff order:
+
+1. **Parallel pattern generation (Go).** Each node's patterns are
+   independent: one goroutine per node.
+2. **Remove the Python model-building bottleneck.** Model construction runs
+   under the GIL. Short term: run a pool of solver processes instead of one
+   threaded server. Long term: build the CP-SAT model in Go and call the C++
+   solver directly. The proto stays as the pluggable solver contract.
+3. **Decomposition.** Pods with disjoint candidate nodes (often separate
+   topology domains) form independent subproblems. Solve them concurrently
+   and merge.
+4. **Pipelining and caching.** Solve batch N+1 while batch N binds, and reuse
+   patterns for nodes unchanged since the last batch.
+
+The first step is profiling the split between pattern generation, model
+build, RPC, and search, so effort goes to the measured bottleneck.
