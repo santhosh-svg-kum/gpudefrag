@@ -70,41 +70,98 @@ func (pl *Placer) PlaceBatch(c *sim.Cluster, pods []model.Pod) []bool {
 	return placed
 }
 
-// Decide chooses placements for pods without changing c (nil = not placed).
+// Request is one job to place: a single pod, or a gang placed all-or-nothing
+// (Local: within one topology domain).
+type Request struct {
+	Pods  []model.Pod
+	Local bool
+}
+
+// Decide chooses placements for single pods without changing c (nil = not placed).
 func (pl *Placer) Decide(c *sim.Cluster, pods []model.Pod) []*Choice {
-	pl.Stats.Batches++
-	if pl.Stats.Fallbacks == nil {
-		pl.Stats.Fallbacks = map[string]int{}
-	}
-	fgd := sched.NewFGD(pl.Typical)
-
-	// FGD hint on a scratch copy.
-	scratch := sim.NewCluster(c.Nodes)
-	hint := make([]*choice, len(pods))
+	reqs := make([]Request, len(pods))
 	for i, p := range pods {
-		if n, g, ok := sched.Place(scratch, fgd, p, nil); ok {
-			hint[i] = &choice{n, g}
-		}
+		reqs[i] = Request{Pods: []model.Pod{p}}
 	}
-
-	best := hint
-	if sol, reason := pl.solve(c, pods, hint, fgd); reason != "" {
-		pl.Stats.Fallbacks[reason]++
-	} else if better(c, pods, sol, hint, pl.Typical) {
-		best = sol
-		pl.Stats.Improved++
-	}
-
 	out := make([]*Choice, len(pods))
-	for i, ch := range best {
-		if ch != nil {
-			out[i] = &Choice{Node: ch.node, GPUs: ch.gpus}
+	for i, d := range pl.DecideRequests(c, reqs) {
+		if d != nil {
+			out[i] = d[0]
 		}
 	}
 	return out
 }
 
-func (pl *Placer) solve(c *sim.Cluster, pods []model.Pod, hint []*choice, fgd sched.FGD) ([]*choice, string) {
+// batch is a flattened request list: pod i belongs to gang[i] (0 = single).
+type batch struct {
+	pods  []model.Pod
+	gang  []int
+	local map[int]bool
+}
+
+// DecideRequests returns, per request, a choice for every pod or nil.
+func (pl *Placer) DecideRequests(c *sim.Cluster, reqs []Request) [][]*Choice {
+	pl.Stats.Batches++
+	if pl.Stats.Fallbacks == nil {
+		pl.Stats.Fallbacks = map[string]int{}
+	}
+	fgd := sched.NewFGD(pl.Typical)
+	b := batch{local: map[int]bool{}}
+	var first []int // index of each request's first pod
+	for r, req := range reqs {
+		first = append(first, len(b.pods))
+		g := 0
+		if len(req.Pods) > 1 {
+			g = r + 1
+			b.local[g] = req.Local
+		}
+		for _, p := range req.Pods {
+			b.pods = append(b.pods, p)
+			b.gang = append(b.gang, g)
+		}
+	}
+
+	// FGD (gang-aware) hint on a scratch copy.
+	scratch := sim.NewCluster(c.Nodes)
+	hint := make([]*choice, len(b.pods))
+	for r, req := range reqs {
+		if len(req.Pods) == 1 {
+			if n, g, ok := sched.Place(scratch, fgd, req.Pods[0], nil); ok {
+				hint[first[r]] = &choice{n, g}
+			}
+			continue
+		}
+		if nodes, gpus, ok := sched.PlaceGang(scratch, fgd, req.Pods, req.Local, nil); ok {
+			for k := range nodes {
+				hint[first[r]+k] = &choice{nodes[k], gpus[k]}
+			}
+		}
+	}
+
+	best := hint
+	if sol, reason := pl.solve(c, b, hint, fgd); reason != "" {
+		pl.Stats.Fallbacks[reason]++
+	} else if better(c, b.pods, sol, hint, pl.Typical) {
+		best = sol
+		pl.Stats.Improved++
+	}
+
+	out := make([][]*Choice, len(reqs))
+	for r, req := range reqs {
+		if best[first[r]] == nil {
+			continue
+		}
+		out[r] = make([]*Choice, len(req.Pods))
+		for k := range req.Pods {
+			ch := best[first[r]+k]
+			out[r][k] = &Choice{Node: ch.node, GPUs: ch.gpus}
+		}
+	}
+	return out
+}
+
+func (pl *Placer) solve(c *sim.Cluster, b batch, hint []*choice, fgd sched.FGD) ([]*choice, string) {
+	pods := b.pods
 	cands := make([]map[int]bool, len(pods))
 	touched := map[int]bool{}
 	req := &pb.PlaceRequest{
@@ -117,14 +174,21 @@ func (pl *Placer) solve(c *sim.Cluster, pods []model.Pod, hint []*choice, fgd sc
 	}
 	for i, p := range pods {
 		cands[i] = map[int]bool{}
-		for _, n := range topK(c, fgd, p.Res, pl.K) {
-			cands[i][n] = true
+		if b.gang[i] != 0 {
+			// Gang pods may need whole domains: offer every feasible node.
+			for _, n := range c.Feasible(p.Res) {
+				cands[i][n] = true
+			}
+		} else {
+			for _, n := range topK(c, fgd, p.Res, pl.K) {
+				cands[i][n] = true
+			}
 		}
 		if hint[i] != nil {
 			cands[i][hint[i].node] = true
 		}
 		pp := &pb.Pod{Id: int32(i), Cpu: p.Res.MilliCPU, Mem: p.Res.MemMiB, GpuNum: int32(p.Res.GpuNum),
-			GpuMilli: p.Res.GpuMilli, Weight: weight(p.Res)}
+			GpuMilli: p.Res.GpuMilli, Weight: weight(p.Res), Gang: int32(b.gang[i]), DomainLocal: b.local[b.gang[i]]}
 		for n := range cands[i] {
 			pp.Candidates = append(pp.Candidates, int32(n))
 			touched[n] = true
@@ -142,7 +206,7 @@ func (pl *Placer) solve(c *sim.Cluster, pods []model.Pod, hint []*choice, fgd sc
 	sort.Ints(ids)
 	for _, id := range ids {
 		n := c.Nodes[id]
-		pn := &pb.Node{Id: int32(id), CpuLeft: n.CPULeft, MemLeft: n.MemLeft, GpuLeft: append([]int64(nil), n.GpuLeft...)}
+		pn := &pb.Node{Id: int32(id), CpuLeft: n.CPULeft, MemLeft: n.MemLeft, GpuLeft: append([]int64(nil), n.GpuLeft...), Domain: n.Domain}
 		for _, tp := range pl.Typical {
 			pn.ClassAccess = append(pn.ClassAccess, n.Accessible(tp.Res))
 		}
@@ -167,10 +231,39 @@ func (pl *Placer) solve(c *sim.Cluster, pods []model.Pod, hint []*choice, fgd sc
 		return nil, "status"
 	}
 	sol, ok := validate(c, pods, cands, resp.Assignments)
-	if !ok {
+	if !ok || !gangsWhole(c, b, sol) {
 		return nil, "invalid"
 	}
 	return sol, ""
+}
+
+// gangsWhole checks every gang is fully placed or not at all, and local
+// gangs sit in one domain.
+func gangsWhole(c *sim.Cluster, b batch, sol []*choice) bool {
+	placed, size := map[int]int{}, map[int]int{}
+	domains := map[int]map[string]bool{}
+	for i, g := range b.gang {
+		if g == 0 {
+			continue
+		}
+		size[g]++
+		if sol[i] != nil {
+			placed[g]++
+			if domains[g] == nil {
+				domains[g] = map[string]bool{}
+			}
+			domains[g][c.Nodes[sol[i].node].Domain] = true
+		}
+	}
+	for g, n := range size {
+		if placed[g] != 0 && placed[g] != n {
+			return false
+		}
+		if b.local[g] && len(domains[g]) > 1 {
+			return false
+		}
+	}
+	return true
 }
 
 func (pl *Placer) patterns(c *sim.Cluster, pods []model.Pod, nodes []int, cands []map[int]bool, hint []*choice) []*pb.Pattern {

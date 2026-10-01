@@ -117,3 +117,56 @@ func TestRealSolver(t *testing.T) {
 		t.Fatalf("real solver should place both: %v %+v", placed, pl.Stats)
 	}
 }
+
+func gangFixture() (*sim.Cluster, []Request, []frag.TargetPod) {
+	var ns []*model.NodeRes
+	for i, d := range []string{"d1", "d1", "d2", "d2"} {
+		n := model.NewNode(string(rune('a'+i)), 96000, 1<<20, 8, "")
+		n.Domain = d
+		ns = append(ns, n)
+	}
+	c := sim.NewCluster(ns)
+	c.Bind(0, model.PodRes{MilliCPU: 1, GpuNum: 1, GpuMilli: 1000}, []int{0}) // d1 can't host two 8-GPU pods
+	pod := model.Pod{Name: "g", Res: model.PodRes{MilliCPU: 1000, MemMiB: 1, GpuNum: 8, GpuMilli: 1000}}
+	typ := []frag.TargetPod{{Res: model.PodRes{MilliCPU: 1000, GpuNum: 8, GpuMilli: 1000}, Pct: 1}}
+	return c, []Request{{Pods: []model.Pod{pod, pod}, Local: true}}, typ
+}
+
+func TestGangPartialOrSplitAnswersRejected(t *testing.T) {
+	for name, asg := range map[string][]*pb.Assignment{
+		"partial": {{Pod: 0, Node: 2, Gpus: []int32{0, 1, 2, 3, 4, 5, 6, 7}}},
+		"split":   {{Pod: 0, Node: 1, Gpus: []int32{0, 1, 2, 3, 4, 5, 6, 7}}, {Pod: 1, Node: 2, Gpus: []int32{0, 1, 2, 3, 4, 5, 6, 7}}},
+	} {
+		c, reqs, typ := gangFixture()
+		pl := placer(&fakeSolver{resp: &pb.PlaceResponse{Status: "OPTIMAL", Assignments: asg}}, typ)
+		out := pl.DecideRequests(c, reqs)
+		if pl.Stats.Fallbacks["invalid"] != 1 {
+			t.Errorf("%s: want invalid fallback, got %v", name, pl.Stats.Fallbacks)
+		}
+		if out[0] == nil || c.Nodes[out[0][0].Node].Domain != "d2" || c.Nodes[out[0][1].Node].Domain != "d2" {
+			t.Errorf("%s: hint (FGD-gang) should place the gang in d2: %+v", name, out[0])
+		}
+	}
+}
+
+func TestGangRealSolver(t *testing.T) {
+	if _, err := exec.LookPath("uv"); err != nil {
+		t.Skip("uv not installed")
+	}
+	addr, stop, err := StartLocal(context.Background(), "../solver")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer stop()
+	cl, _ := Dial(addr)
+	defer cl.Close()
+	c, reqs, typ := gangFixture()
+	pl := placer(cl, typ)
+	out := pl.DecideRequests(c, reqs)
+	if out[0] == nil || out[0][0].Node == out[0][1].Node || c.Nodes[out[0][0].Node].Domain != "d2" {
+		t.Fatalf("%+v stats %+v", out, pl.Stats)
+	}
+	if len(pl.Stats.Fallbacks) != 0 {
+		t.Fatalf("real solver answer should validate: %v", pl.Stats.Fallbacks)
+	}
+}
