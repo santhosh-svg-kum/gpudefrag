@@ -70,6 +70,7 @@ type NodeRes struct {
 	GpuType  string
 	GpuLeft  []int64        // milli-GPU left per device
 	Affinity map[string]int // count of GPU pods per affinity tag (zero counts are deleted)
+	Domain   string         // topology domain (rack / NVLink island); "" = none
 }
 
 func NewNode(name string, cpu, mem int64, gpus int, gpuType string) *NodeRes {

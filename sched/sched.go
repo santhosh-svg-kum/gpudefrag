@@ -44,6 +44,8 @@ func New(name string, typical []frag.TargetPod) (Policy, error) {
 		return BestFit{}, nil
 	case "FGD":
 		return NewFGD(typical), nil
+	case "Binpack":
+		return Binpack{}, nil
 	}
 	return nil, fmt.Errorf("unknown policy %q", name)
 }
