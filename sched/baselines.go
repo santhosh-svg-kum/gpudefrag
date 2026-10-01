@@ -70,7 +70,9 @@ func (BestFit) Score(c *sim.Cluster, idx []int, p model.PodRes, _ *rand.Rand) []
 	normalize(out)
 	return out
 }
-func (BestFit) SelectGPUs(n *model.NodeRes, p model.PodRes, _ *rand.Rand) []int { return BestFitGPUs(n, p) }
+func (BestFit) SelectGPUs(n *model.NodeRes, p model.PodRes, _ *rand.Rand) []int {
+	return BestFitGPUs(n, p)
+}
 
 // DotProd prefers nodes whose free-resource vector is most aligned with the
 // pod's request ("merge" dimensions, "max" normalisation).
@@ -85,7 +87,9 @@ func (DotProd) Score(c *sim.Cluster, idx []int, p model.PodRes, _ *rand.Rand) []
 		return int64(float64(MaxScore) * (1 - dot))
 	})
 }
-func (DotProd) SelectGPUs(n *model.NodeRes, p model.PodRes, _ *rand.Rand) []int { return BestFitGPUs(n, p) }
+func (DotProd) SelectGPUs(n *model.NodeRes, p model.PodRes, _ *rand.Rand) []int {
+	return BestFitGPUs(n, p)
+}
 
 // GpuClustering co-locates pods with the same GPU-affinity tag.
 type GpuClustering struct{}

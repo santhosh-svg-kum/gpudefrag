@@ -47,7 +47,7 @@ func TestGpuPacking(t *testing.T) {
 
 func TestGpuClustering(t *testing.T) {
 	a := node("A", 64000, 1000, 500)
-	a.Affinity["share-gpu"] = 1 // 25*6500/8000 + 75 = 95
+	a.Affinity["share-gpu"] = 1       // 25*6500/8000 + 75 = 95
 	b := node("B", 64000, 1000, 1000) // 25*6000/8000 + 25 = 43
 	got, _ := place(t, GpuClustering{}, []*model.NodeRes{b, a}, model.PodRes{MilliCPU: 1000, GpuNum: 1, GpuMilli: 400})
 	if got != "A" {

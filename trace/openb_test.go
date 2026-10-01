@@ -34,7 +34,7 @@ func TestLoadOpenbPods(t *testing.T) {
 	want := []model.Pod{
 		{Name: "openb-pod-0001", Res: model.PodRes{MilliCPU: 12000, MemMiB: 16384, GpuNum: 1, GpuMilli: 1000}},
 		{Name: "openb-pod-0002", Res: model.PodRes{MilliCPU: 6000, MemMiB: 12288, GpuNum: 1, GpuMilli: 460}},
-		{Name: "openb-pod-0003", Res: model.PodRes{MilliCPU: 100, MemMiB: 200}}, // kube nonzero defaults
+		{Name: "openb-pod-0003", Res: model.PodRes{MilliCPU: 100, MemMiB: 200}},                                                            // kube nonzero defaults
 		{Name: "openb-pod-0004", Res: model.PodRes{MilliCPU: 16000, MemMiB: 32768, GpuNum: 1, GpuMilli: 1000, GpuType: "V100M16|V100M32"}}, // clamped
 		{Name: "openb-pod-0005", Res: model.PodRes{MilliCPU: 88000, MemMiB: 327680, GpuNum: 8, GpuMilli: 1000}},
 	}
@@ -51,7 +51,7 @@ func TestLoadOpenbPods(t *testing.T) {
 func TestLoadOpenbPodsRejectsUnsupportedRows(t *testing.T) {
 	head := "name,cpu_milli,memory_mib,num_gpu,gpu_milli,gpu_spec\n"
 	for name, row := range map[string]string{
-		"share multi-gpu": "p,1000,10,2,500,\n",
+		"share multi-gpu":   "p,1000,10,2,500,\n",
 		"gpu without milli": "p,1000,10,1,0,\n",
 		"non-numeric":       "p,abc,10,0,0,\n",
 	} {

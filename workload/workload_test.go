@@ -81,7 +81,7 @@ func TestPrepareIsDeterministicPerSeed(t *testing.T) {
 }
 
 func TestPrepareTunesUp(t *testing.T) {
-	ps := pods("b", 1, 1, 500, "a", 1, 1, 500) // 1000 milli
+	ps := pods("b", 1, 1, 500, "a", 1, 1, 500)                 // 1000 milli
 	out := Prepare(rand.New(rand.NewSource(1)), ps, 1000, 2.0) // target 2000
 	var total int64
 	for i, p := range out {
