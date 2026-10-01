@@ -55,6 +55,7 @@ message Pattern {
   int32 node = 1;
   repeated Assignment assignments = 2;  // pods placed on `node` and their GPUs
   double frag = 3;                      // node fragmentation after placement, milli-GPU
+  bool opens_idle = 4;                  // places GPU pods on a node whose GPUs were all free
 }
 
 message PlaceRequest {
@@ -67,6 +68,9 @@ message PlaceRequest {
   int32 workers = 7;
   bool gang_domains = 8;  // gangs must stay within one domain (M4)
   repeated Pattern patterns = 9;
+  // Cost of opening an idle node, in milli-GPU of fragmentation. < 0 makes it
+  // lexicographic: fewer opened idle nodes always beats less fragmentation.
+  double idle_weight = 10;
 }
 
 message PlaceResponse {

@@ -14,6 +14,8 @@ type pattern struct {
 	pods []int   // indices into the batch, ascending
 	gpus [][]int // devices per pod
 	frag float64
+	// opensIdle: the node had every GPU free and this pattern uses one.
+	opensIdle bool
 }
 
 // genPatterns enumerates subsets of cand (batch indices) of size <= maxSize
@@ -59,7 +61,21 @@ func genPatterns(c *sim.Cluster, node int, cand []int, pods []model.Pod, typical
 		}
 	}
 	rec(0, c.Nodes[node], 0, nil)
+	if n := c.Nodes[node]; n.GpuNum() > 0 && n.FullyFree() == n.GpuNum() {
+		for i := range out {
+			out[i].opensIdle = usesGPU(out[i].gpus)
+		}
+	}
 	return out
+}
+
+func usesGPU(gpus [][]int) bool {
+	for _, g := range gpus {
+		if len(g) > 0 {
+			return true
+		}
+	}
+	return false
 }
 
 type pick struct {

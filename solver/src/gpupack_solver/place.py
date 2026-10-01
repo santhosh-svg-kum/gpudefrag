@@ -221,6 +221,11 @@ def solve_patterns(req: pb.PlaceRequest) -> pb.PlaceResponse:
         m.Add(sum(dv for (gg, _), dv in dom_var.items() if gg == g) == admit[g])
     placed_c = [sum(weight[a.pod] for a in pat.assignments) for pat in req.patterns]
     frag_c = [round(pat.frag * 1000) for pat in req.patterns]
+    if req.idle_weight < 0:  # lexicographic: opened idle nodes before fragmentation
+        span = sum(max((f for f, pat in zip(frag_c, req.patterns) if pat.node == n), default=0) for n in by_node) + 1
+        frag_c = [f + span * int(pat.opens_idle) for f, pat in zip(frag_c, req.patterns)]
+    elif req.idle_weight > 0:
+        frag_c = [f + round(req.idle_weight * 1000) * int(pat.opens_idle) for f, pat in zip(frag_c, req.patterns)]
     # big > any possible total-frag difference, so one more unit of placed
     # weight always beats any fragmentation saving.
     big = sum(max((f for f, pat in zip(frag_c, req.patterns) if pat.node == n), default=0)

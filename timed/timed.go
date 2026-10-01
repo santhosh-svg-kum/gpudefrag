@@ -73,6 +73,7 @@ type Result struct {
 	AllocTimeAvg      float64   // mean allocated GPU fraction over [0, last arrival]
 	Unplaced          int
 	UnplacedGpuMilli  int64
+	PendingByGpus     map[int]int // pending jobs at end, keyed by GPUs per job
 	BindConflicts     int
 	Sessions          int
 	SolveWall         []time.Duration
@@ -142,8 +143,14 @@ func Run(cfg Config) Result {
 	if w := s.horizon - cfg.MeasureFrom; w > 0 {
 		s.res.AllocTimeAvg = s.allocInt / (w * float64(s.c.TotalGpuMilli()))
 	}
+	s.res.PendingByGpus = map[int]int{}
 	for _, j := range s.pending {
 		s.res.Unplaced++
+		g := 0
+		for _, p := range j.pods {
+			g += p.Res.GpuNum
+		}
+		s.res.PendingByGpus[g]++
 		for _, p := range j.pods {
 			s.res.UnplacedGpuMilli += p.Res.TotalMilliGpu()
 		}

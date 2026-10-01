@@ -102,6 +102,8 @@ func runSuite2(args []string) error {
 	domainSize := fs.Int("domain", 4, "nodes per topology domain; gangs up to this many pods stay in one domain")
 	batch := fs.Int("batch", 16, "jobs per scheduling session")
 	limit := fs.Duration("time", 500*time.Millisecond, "gpupack solver budget per batch")
+	objW := fs.Float64("obj-gpu-weight", 1, "gpupack objective: GPU weight for typical classes (FGD gpuResWeight); 0 = FGD's count weighting")
+	idle := fs.Float64("idle-weight", -1, "gpupack penalty (milli-GPU) for opening an idle node; <0 lexicographic, 0 off")
 	parallel := fs.Int("parallel", 4, "concurrent runs")
 	solverDir := fs.String("solver-dir", "solver", "python solver project")
 	addr := fs.String("solver", "", "solver address (default: start one locally)")
@@ -126,6 +128,7 @@ func runSuite2(args []string) error {
 		pods = append(pods, j.Gang...)
 	}
 	typical := workload.TypicalPods(pods)
+	objTypical := workload.TypicalPodsWeighted(pods, *objW)
 	warm := 3 * day
 	starts := busiestWeeks(all, *windows, warm)
 
@@ -173,7 +176,7 @@ func runSuite2(args []string) error {
 					MeasureFrom: warm / j.c, DrainLimit: 1}
 				name, defrag := strings.CutSuffix(j.variant, "+defrag")
 				if name == "gpupack" {
-					cfg.Decider = &mip.Placer{Solver: client, Typical: typical, K: 16, TimeLimit: *limit, Deterministic: true, Workers: cpWorkers}
+					cfg.Decider = &mip.Placer{Solver: client, Typical: typical, K: 16, TimeLimit: *limit, Deterministic: true, Workers: cpWorkers, IdleWeight: *idle, ObjectiveTypical: objTypical}
 				} else {
 					pol, err := sched.New(name, typical)
 					if err != nil {

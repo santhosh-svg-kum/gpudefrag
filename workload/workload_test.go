@@ -106,3 +106,16 @@ func TestPrepareTunesDown(t *testing.T) {
 		t.Fatalf("total=%d n=%d", total, len(out))
 	}
 }
+
+func TestTypicalPodsWeightedByGPU(t *testing.T) {
+	var ps []model.Pod
+	ps = append(ps, repeat(8, 1000, 1, 500, "s")...)  // share pods
+	ps = append(ps, repeat(2, 1000, 8, 1000, "w")...) // 8-GPU pods
+	tp := TypicalPodsWeighted(ps, 1)                  // whole-GPU pod counts 1 + 8*1 = 9
+	if tp[0].Res.GpuNum != 8 || math.Abs(tp[0].Pct-18.0/26) > 1e-9 {
+		t.Fatalf("%+v", tp)
+	}
+	if !reflect.DeepEqual(TypicalPodsWeighted(ps, 0), TypicalPods(ps)) {
+		t.Fatal("weight 0 must equal FGD's default")
+	}
+}

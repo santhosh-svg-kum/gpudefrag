@@ -29,12 +29,13 @@ type run1b struct {
 	Seed       int64   `json:"seed"`
 	P50, P95   float64 // GPU pending latency, seconds
 	P99        float64
-	Alloc      float64 `json:"alloc_pct"`
-	Unplaced   int     `json:"unplaced"`
-	Conflicts  int     `json:"bind_conflicts"`
-	Plans      int     `json:"defrag_plans"`
-	Migrations int     `json:"migrations"`
-	LostGpuH   float64 `json:"lost_gpu_hours"`
+	Alloc      float64     `json:"alloc_pct"`
+	Unplaced   int         `json:"unplaced"`
+	PendingBy  map[int]int `json:"pending_by_gpus"`
+	Conflicts  int         `json:"bind_conflicts"`
+	Plans      int         `json:"defrag_plans"`
+	Migrations int         `json:"migrations"`
+	LostGpuH   float64     `json:"lost_gpu_hours"`
 	Rejected   map[string]int
 	SolveP99   float64 `json:"solve_p99_ms"`
 	WallS      float64 `json:"wall_s"`
@@ -54,6 +55,8 @@ func runSuite1b(args []string) error {
 	seedHi := fs.Int64("seed-to", 46, "last seed")
 	batch := fs.Int("batch", 16, "pods per scheduling session")
 	limit := fs.Duration("time", 500*time.Millisecond, "gpupack solver budget per batch")
+	objW := fs.Float64("obj-gpu-weight", 1, "gpupack objective: GPU weight for typical classes (FGD gpuResWeight); 0 = FGD's count weighting")
+	idle := fs.Float64("idle-weight", -1, "gpupack penalty (milli-GPU) for opening an idle node; <0 lexicographic, 0 off")
 	parallel := fs.Int("parallel", 5, "concurrent runs")
 	solverDir := fs.String("solver-dir", "solver", "python solver project")
 	addr := fs.String("solver", "", "solver address (default: start one locally)")
@@ -73,6 +76,7 @@ func runSuite1b(args []string) error {
 		basePods = append(basePods, j.Pod)
 	}
 	typical := workload.TypicalPods(basePods)
+	objTypical := workload.TypicalPodsWeighted(basePods, *objW)
 	var capMilli int64
 	for _, nd := range nodes {
 		capMilli += int64(nd.GpuNum()) * model.Milli
@@ -117,7 +121,7 @@ func runSuite1b(args []string) error {
 				name, defrag := strings.CutSuffix(j.variant, "+defrag")
 				switch name {
 				case "gpupack":
-					cfg.Decider = &mip.Placer{Solver: client, Typical: typical, K: 16, TimeLimit: *limit, Deterministic: true, Workers: cpWorkers}
+					cfg.Decider = &mip.Placer{Solver: client, Typical: typical, K: 16, TimeLimit: *limit, Deterministic: true, Workers: cpWorkers, IdleWeight: *idle, ObjectiveTypical: objTypical}
 				default:
 					pol, err := sched.New(name, typical)
 					if err != nil {
@@ -141,13 +145,13 @@ func runSuite1b(args []string) error {
 					return lat[min(len(lat)-1, int(p*float64(len(lat))))]
 				}
 				res := run1b{Variant: j.variant, Load: j.load, Seed: j.seed, P50: q(0.5), P95: q(0.95), P99: q(0.99),
-					Alloc: 100 * r.AllocTimeAvg, Unplaced: r.Unplaced, Conflicts: r.BindConflicts,
+					Alloc: 100 * r.AllocTimeAvg, Unplaced: r.Unplaced, PendingBy: r.PendingByGpus, Conflicts: r.BindConflicts,
 					Plans: r.Defrag.Plans, Migrations: r.Defrag.Migrations, LostGpuH: r.Defrag.LostGpuSec / 3600,
 					Rejected: r.Defrag.Rejected, SolveP99: pctl(r.SolveWall, 0.99), WallS: time.Since(t0).Seconds()}
 				mu.Lock()
 				runs = append(runs, res)
-				fmt.Fprintf(os.Stderr, "  %-16s load %.1f seed %d: p95 %.0fs alloc %.2f%% unplaced %d moves %d (%.0fs)\n",
-					j.variant, j.load, j.seed, res.P95, res.Alloc, res.Unplaced, res.Migrations, res.WallS)
+				fmt.Fprintf(os.Stderr, "  %-16s load %.1f seed %d: p95 %.0fs alloc %.2f%% unplaced %d %v moves %d (%.0fs)\n",
+					j.variant, j.load, j.seed, res.P95, res.Alloc, res.Unplaced, res.PendingBy, res.Migrations, res.WallS)
 				mu.Unlock()
 			}
 		}()

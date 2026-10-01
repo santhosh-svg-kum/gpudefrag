@@ -29,6 +29,7 @@ type variant struct {
 	Batch int
 	Limit time.Duration
 	K     int
+	Idle  float64
 }
 
 func parseVariant(s string) (variant, error) {
@@ -51,6 +52,8 @@ func parseVariant(s string) (variant, error) {
 			v.Limit, err = time.ParseDuration(val)
 		case "k":
 			v.K, err = strconv.Atoi(val)
+		case "i":
+			v.Idle, err = strconv.ParseFloat(val, 64)
 		default:
 			err = fmt.Errorf("unknown option %q", k)
 		}
@@ -144,7 +147,7 @@ func runSuite1a(args []string) error {
 				cfg := calib.RunConfig{Nodes: nodes, Pods: pods, Policy: j.v.Name, Seed: j.seed, Ratio: 1.3}
 				var pl *mip.Placer
 				if strings.HasPrefix(j.v.Name, "gpupack") {
-					pl = &mip.Placer{Solver: client, Typical: typical, K: j.v.K, TimeLimit: j.v.Limit, Deterministic: true, Workers: cpWorkers}
+					pl = &mip.Placer{Solver: client, Typical: typical, K: j.v.K, TimeLimit: j.v.Limit, Deterministic: true, Workers: cpWorkers, IdleWeight: j.v.Idle}
 					cfg.Placer, cfg.Batch = pl, j.v.Batch
 				}
 				r, err := calib.RunDetailed(cfg)

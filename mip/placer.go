@@ -44,6 +44,14 @@ type Placer struct {
 	MaxPatternSize int
 	MaxPatterns    int
 	Direct         bool
+	// IdleWeight is the penalty (milli-GPU of fragmentation) for putting GPU
+	// pods on a node whose GPUs are all free; < 0 = lexicographic (never
+	// open an idle node if a used one works). Keeps whole nodes free for
+	// large jobs, which FGD's measure under-values when they are rare.
+	IdleWeight float64
+	// ObjectiveTypical, if set, is the typical-pod distribution the solver
+	// optimizes (e.g. GPU-weighted); the FGD hint always uses Typical.
+	ObjectiveTypical []frag.TargetPod
 	Stats          Stats
 }
 
@@ -144,7 +152,7 @@ func (pl *Placer) DecideRequests(c *sim.Cluster, reqs []Request) [][]*Choice {
 		pl.Stats.NoFit++
 	} else if reason != "" {
 		pl.Stats.Fallbacks[reason]++
-	} else if better(c, b.pods, sol, hint, pl.Typical) {
+	} else if better(c, b.pods, sol, hint, pl.objective()) {
 		best = sol
 		pl.Stats.Improved++
 	}
@@ -172,7 +180,7 @@ func (pl *Placer) solve(c *sim.Cluster, b batch, hint []*choice, fgd sched.FGD) 
 		Deterministic: pl.Deterministic,
 		Workers:       int32(pl.Workers),
 	}
-	for _, tp := range pl.Typical {
+	for _, tp := range pl.objective() {
 		req.Classes = append(req.Classes, &pb.TypicalClass{Cpu: tp.Res.MilliCPU, GpuMilli: tp.Res.GpuMilli, GpuNum: int32(tp.Res.GpuNum), Pct: tp.Pct})
 	}
 	for i, p := range pods {
@@ -210,7 +218,7 @@ func (pl *Placer) solve(c *sim.Cluster, b batch, hint []*choice, fgd sched.FGD) 
 	for _, id := range ids {
 		n := c.Nodes[id]
 		pn := &pb.Node{Id: int32(id), CpuLeft: n.CPULeft, MemLeft: n.MemLeft, GpuLeft: append([]int64(nil), n.GpuLeft...), Domain: n.Domain}
-		for _, tp := range pl.Typical {
+		for _, tp := range pl.objective() {
 			pn.ClassAccess = append(pn.ClassAccess, n.Accessible(tp.Res))
 		}
 		req.Nodes = append(req.Nodes, pn)
@@ -220,6 +228,7 @@ func (pl *Placer) solve(c *sim.Cluster, b batch, hint []*choice, fgd sched.FGD) 
 	}
 	if !pl.Direct {
 		req.Patterns = pl.patterns(c, pods, ids, cands, hint)
+		req.IdleWeight = pl.IdleWeight
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), pl.TimeLimit*3/2+2*time.Second)
@@ -285,7 +294,7 @@ func (pl *Placer) patterns(c *sim.Cluster, pods []model.Pod, nodes []int, cands 
 				here = append(here, i)
 			}
 		}
-		for _, p := range genPatterns(c, n, here, pods, pl.Typical, size, limit) {
+		for _, p := range genPatterns(c, n, here, pods, pl.objective(), size, limit) {
 			out = append(out, toPB(p))
 		}
 		// The hint's own pattern for this node keeps FGD's answer reachable.
@@ -298,14 +307,23 @@ func (pl *Placer) patterns(c *sim.Cluster, pods []model.Pod, nodes []int, cands 
 				h.gpus = append(h.gpus, ch.gpus)
 			}
 		}
-		h.frag = frag.NodeScore(scratch.Nodes[0], pl.Typical)
+		h.frag = frag.NodeScore(scratch.Nodes[0], pl.objective())
+		nd := c.Nodes[n]
+		h.opensIdle = nd.GpuNum() > 0 && nd.FullyFree() == nd.GpuNum() && usesGPU(h.gpus)
 		out = append(out, toPB(h))
 	}
 	return out
 }
 
+func (pl *Placer) objective() []frag.TargetPod {
+	if pl.ObjectiveTypical != nil {
+		return pl.ObjectiveTypical
+	}
+	return pl.Typical
+}
+
 func toPB(p pattern) *pb.Pattern {
-	pp := &pb.Pattern{Node: int32(p.node), Frag: p.frag}
+	pp := &pb.Pattern{Node: int32(p.node), Frag: p.frag, OpensIdle: p.opensIdle}
 	for k, i := range p.pods {
 		pp.Assignments = append(pp.Assignments, &pb.Assignment{Pod: int32(i), Node: int32(p.node), Gpus: toI32(p.gpus[k])})
 	}

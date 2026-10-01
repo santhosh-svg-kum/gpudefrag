@@ -61,14 +61,24 @@ const popularityThreshold = 95 // percent of pods covered by the typical classes
 
 // TypicalPods is FGD's GetTypicalPods with its experiment defaults
 // (CPU pods included, 95% popularity threshold, step 1, no GPU weighting).
-func TypicalPods(pods []model.Pod) []frag.TargetPod {
+func TypicalPods(pods []model.Pod) []frag.TargetPod { return TypicalPodsWeighted(pods, 0) }
+
+// TypicalPodsWeighted is GetTypicalPods with FGD's gpuResWeight option: a
+// whole-GPU pod counts 1 + gpus x weight, so classes that hold many GPUs
+// matter in proportion to the capacity they need, not just their count.
+func TypicalPodsWeighted(pods []model.Pod, gpuWeight float64) []frag.TargetPod {
 	counts := map[model.PodRes]float64{}
+	var total float64
 	for _, p := range pods {
 		k := p.Res
 		k.MemMiB = 0
-		counts[k]++
+		w := 1.0
+		if gpuWeight > 0 && k.GpuMilli == model.Milli {
+			w = 1 + float64(k.GpuNum)*gpuWeight
+		}
+		counts[k] += w
+		total += w
 	}
-	total := float64(len(pods))
 	list := make([]frag.TargetPod, 0, len(counts))
 	for k, c := range counts {
 		list = append(list, frag.TargetPod{Res: k, Pct: c})

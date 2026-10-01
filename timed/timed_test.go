@@ -194,3 +194,12 @@ func TestLocalGangRespectsDomains(t *testing.T) {
 		t.Fatalf("unconstrained gang should run: %+v", r)
 	}
 }
+
+func TestPendingAtEndBySize(t *testing.T) {
+	big := gpuJob("big", 0, 10, 1000)
+	big.Pod.Res.GpuNum = 8
+	r := Run(Config{Nodes: nodes(2), Jobs: []trace.Job{big, gpuJob("s", 0, 10, 500)}, Decider: bestFit(), Latency: fixed(0), DrainLimit: 1})
+	if !reflect.DeepEqual(r.PendingByGpus, map[int]int{8: 1}) {
+		t.Fatalf("%v", r.PendingByGpus)
+	}
+}

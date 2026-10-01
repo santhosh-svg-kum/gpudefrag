@@ -352,8 +352,9 @@ func (x *Assignment) GetGpus() []int32 {
 type Pattern struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Node          int32                  `protobuf:"varint,1,opt,name=node,proto3" json:"node,omitempty"`
-	Assignments   []*Assignment          `protobuf:"bytes,2,rep,name=assignments,proto3" json:"assignments,omitempty"` // pods placed on `node` and their GPUs
-	Frag          float64                `protobuf:"fixed64,3,opt,name=frag,proto3" json:"frag,omitempty"`             // node fragmentation after placement, milli-GPU
+	Assignments   []*Assignment          `protobuf:"bytes,2,rep,name=assignments,proto3" json:"assignments,omitempty"`               // pods placed on `node` and their GPUs
+	Frag          float64                `protobuf:"fixed64,3,opt,name=frag,proto3" json:"frag,omitempty"`                           // node fragmentation after placement, milli-GPU
+	OpensIdle     bool                   `protobuf:"varint,4,opt,name=opens_idle,json=opensIdle,proto3" json:"opens_idle,omitempty"` // places GPU pods on a node whose GPUs were all free
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -409,6 +410,13 @@ func (x *Pattern) GetFrag() float64 {
 	return 0
 }
 
+func (x *Pattern) GetOpensIdle() bool {
+	if x != nil {
+		return x.OpensIdle
+	}
+	return false
+}
+
 type PlaceRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Nodes         []*Node                `protobuf:"bytes,1,rep,name=nodes,proto3" json:"nodes,omitempty"`
@@ -420,6 +428,9 @@ type PlaceRequest struct {
 	Workers       int32                  `protobuf:"varint,7,opt,name=workers,proto3" json:"workers,omitempty"`
 	GangDomains   bool                   `protobuf:"varint,8,opt,name=gang_domains,json=gangDomains,proto3" json:"gang_domains,omitempty"` // gangs must stay within one domain (M4)
 	Patterns      []*Pattern             `protobuf:"bytes,9,rep,name=patterns,proto3" json:"patterns,omitempty"`
+	// Cost of opening an idle node, in milli-GPU of fragmentation. < 0 makes it
+	// lexicographic: fewer opened idle nodes always beats less fragmentation.
+	IdleWeight    float64 `protobuf:"fixed64,10,opt,name=idle_weight,json=idleWeight,proto3" json:"idle_weight,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -515,6 +526,13 @@ func (x *PlaceRequest) GetPatterns() []*Pattern {
 		return x.Patterns
 	}
 	return nil
+}
+
+func (x *PlaceRequest) GetIdleWeight() float64 {
+	if x != nil {
+		return x.IdleWeight
+	}
+	return 0
 }
 
 type PlaceResponse struct {
@@ -1060,11 +1078,13 @@ const file_gpupack_v1_solver_proto_rawDesc = "" +
 	"Assignment\x12\x10\n" +
 	"\x03pod\x18\x01 \x01(\x05R\x03pod\x12\x12\n" +
 	"\x04node\x18\x02 \x01(\x05R\x04node\x12\x12\n" +
-	"\x04gpus\x18\x03 \x03(\x05R\x04gpus\"k\n" +
+	"\x04gpus\x18\x03 \x03(\x05R\x04gpus\"\x8a\x01\n" +
 	"\aPattern\x12\x12\n" +
 	"\x04node\x18\x01 \x01(\x05R\x04node\x128\n" +
 	"\vassignments\x18\x02 \x03(\v2\x16.gpupack.v1.AssignmentR\vassignments\x12\x12\n" +
-	"\x04frag\x18\x03 \x01(\x01R\x04frag\"\xf1\x02\n" +
+	"\x04frag\x18\x03 \x01(\x01R\x04frag\x12\x1d\n" +
+	"\n" +
+	"opens_idle\x18\x04 \x01(\bR\topensIdle\"\x92\x03\n" +
 	"\fPlaceRequest\x12&\n" +
 	"\x05nodes\x18\x01 \x03(\v2\x10.gpupack.v1.NodeR\x05nodes\x12#\n" +
 	"\x04pods\x18\x02 \x03(\v2\x0f.gpupack.v1.PodR\x04pods\x122\n" +
@@ -1075,7 +1095,10 @@ const file_gpupack_v1_solver_proto_rawDesc = "" +
 	"\rdeterministic\x18\x06 \x01(\bR\rdeterministic\x12\x18\n" +
 	"\aworkers\x18\a \x01(\x05R\aworkers\x12!\n" +
 	"\fgang_domains\x18\b \x01(\bR\vgangDomains\x12/\n" +
-	"\bpatterns\x18\t \x03(\v2\x13.gpupack.v1.PatternR\bpatterns\"\xe0\x01\n" +
+	"\bpatterns\x18\t \x03(\v2\x13.gpupack.v1.PatternR\bpatterns\x12\x1f\n" +
+	"\vidle_weight\x18\n" +
+	" \x01(\x01R\n" +
+	"idleWeight\"\xe0\x01\n" +
 	"\rPlaceResponse\x128\n" +
 	"\vassignments\x18\x01 \x03(\v2\x16.gpupack.v1.AssignmentR\vassignments\x12\x16\n" +
 	"\x06status\x18\x02 \x01(\tR\x06status\x12\x15\n" +

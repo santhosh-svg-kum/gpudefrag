@@ -197,3 +197,21 @@ def test_pattern_mode_only_uses_given_patterns():
     resp = solve_place(req)
     assert [(a.pod, a.node) for a in resp.assignments] == [(0, 1)]
     assert abs(resp.frag - 1000) < 1e-6
+
+
+def test_idle_weight_prefers_packing_over_fragmentation():
+    # Two choices for one share pod: an idle node (frag 0) or a used node (frag 10).
+    nodes = [node(0, [1000, 1000]), node(1, [500, 1000])]
+    pods = [pod(0, 1000, 1, 500, [0, 1])]
+    pats = [
+        pb.Pattern(node=0, frag=0), pb.Pattern(node=1, frag=500),
+        pb.Pattern(node=0, frag=0, opens_idle=True, assignments=[pb.Assignment(pod=0, node=0, gpus=[0])]),
+        pb.Pattern(node=1, frag=600, assignments=[pb.Assignment(pod=0, node=1, gpus=[0])]),
+    ]
+    # totals: idle node 0 + 500 = 500; used node 0 + 600 = 600 -> frag alone prefers opening node 0.
+    for w, want in ((0, 0), (-1, 1), (200, 1), (50, 0)):
+        req = request(nodes, pods)
+        req.patterns.extend(pats)
+        req.idle_weight = w
+        (a,) = solve_place(req).assignments
+        assert a.node == want, (w, a.node)

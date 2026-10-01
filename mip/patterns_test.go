@@ -62,3 +62,29 @@ func TestGenPatternsSkipsInfeasible(t *testing.T) {
 		}
 	}
 }
+
+func TestPatternsMarkOpeningIdleNodes(t *testing.T) {
+	idle := model.NewNode("idle", 64000, 1<<20, 2, "")
+	used := model.NewNode("used", 64000, 1<<20, 2, "")
+	used.GpuLeft[0] = 500
+	c := sim.NewCluster([]*model.NodeRes{idle, used})
+	pods := []model.Pod{
+		{Name: "g", Res: model.PodRes{MilliCPU: 1, MemMiB: 1, GpuNum: 1, GpuMilli: 500}},
+		{Name: "cpu", Res: model.PodRes{MilliCPU: 1, MemMiB: 1}},
+	}
+	typ := []frag.TargetPod{{Res: model.PodRes{MilliCPU: 1, GpuNum: 1, GpuMilli: 1000}, Pct: 1}}
+	for _, p := range genPatterns(c, 0, []int{0, 1}, pods, typ, 3, 100) {
+		hasGPU := false
+		for _, i := range p.pods {
+			hasGPU = hasGPU || pods[i].Res.GpuNum > 0
+		}
+		if p.opensIdle != hasGPU {
+			t.Fatalf("idle node pattern %v: opensIdle=%v", p.pods, p.opensIdle)
+		}
+	}
+	for _, p := range genPatterns(c, 1, []int{0, 1}, pods, typ, 3, 100) {
+		if p.opensIdle {
+			t.Fatal("a partly used node is never 'opened'")
+		}
+	}
+}
