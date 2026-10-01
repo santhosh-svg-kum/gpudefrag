@@ -337,6 +337,70 @@ func (x *Assignment) GetGpus() []int32 {
 	return nil
 }
 
+// A pattern is one way to fill one node with a subset of the batch, with its
+// exact post-placement fragmentation precomputed by the caller (column
+// formulation). When patterns are present the solver picks exactly one
+// pattern per node instead of building the direct model.
+type Pattern struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Node          int32                  `protobuf:"varint,1,opt,name=node,proto3" json:"node,omitempty"`
+	Assignments   []*Assignment          `protobuf:"bytes,2,rep,name=assignments,proto3" json:"assignments,omitempty"` // pods placed on `node` and their GPUs
+	Frag          float64                `protobuf:"fixed64,3,opt,name=frag,proto3" json:"frag,omitempty"`             // node fragmentation after placement, milli-GPU
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *Pattern) Reset() {
+	*x = Pattern{}
+	mi := &file_gpupack_v1_solver_proto_msgTypes[4]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *Pattern) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*Pattern) ProtoMessage() {}
+
+func (x *Pattern) ProtoReflect() protoreflect.Message {
+	mi := &file_gpupack_v1_solver_proto_msgTypes[4]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use Pattern.ProtoReflect.Descriptor instead.
+func (*Pattern) Descriptor() ([]byte, []int) {
+	return file_gpupack_v1_solver_proto_rawDescGZIP(), []int{4}
+}
+
+func (x *Pattern) GetNode() int32 {
+	if x != nil {
+		return x.Node
+	}
+	return 0
+}
+
+func (x *Pattern) GetAssignments() []*Assignment {
+	if x != nil {
+		return x.Assignments
+	}
+	return nil
+}
+
+func (x *Pattern) GetFrag() float64 {
+	if x != nil {
+		return x.Frag
+	}
+	return 0
+}
+
 type PlaceRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Nodes         []*Node                `protobuf:"bytes,1,rep,name=nodes,proto3" json:"nodes,omitempty"`
@@ -347,13 +411,14 @@ type PlaceRequest struct {
 	Deterministic bool                   `protobuf:"varint,6,opt,name=deterministic,proto3" json:"deterministic,omitempty"`
 	Workers       int32                  `protobuf:"varint,7,opt,name=workers,proto3" json:"workers,omitempty"`
 	GangDomains   bool                   `protobuf:"varint,8,opt,name=gang_domains,json=gangDomains,proto3" json:"gang_domains,omitempty"` // gangs must stay within one domain (M4)
+	Patterns      []*Pattern             `protobuf:"bytes,9,rep,name=patterns,proto3" json:"patterns,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *PlaceRequest) Reset() {
 	*x = PlaceRequest{}
-	mi := &file_gpupack_v1_solver_proto_msgTypes[4]
+	mi := &file_gpupack_v1_solver_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -365,7 +430,7 @@ func (x *PlaceRequest) String() string {
 func (*PlaceRequest) ProtoMessage() {}
 
 func (x *PlaceRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_gpupack_v1_solver_proto_msgTypes[4]
+	mi := &file_gpupack_v1_solver_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -378,7 +443,7 @@ func (x *PlaceRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PlaceRequest.ProtoReflect.Descriptor instead.
 func (*PlaceRequest) Descriptor() ([]byte, []int) {
-	return file_gpupack_v1_solver_proto_rawDescGZIP(), []int{4}
+	return file_gpupack_v1_solver_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *PlaceRequest) GetNodes() []*Node {
@@ -437,6 +502,13 @@ func (x *PlaceRequest) GetGangDomains() bool {
 	return false
 }
 
+func (x *PlaceRequest) GetPatterns() []*Pattern {
+	if x != nil {
+		return x.Patterns
+	}
+	return nil
+}
+
 type PlaceResponse struct {
 	state             protoimpl.MessageState `protogen:"open.v1"`
 	Assignments       []*Assignment          `protobuf:"bytes,1,rep,name=assignments,proto3" json:"assignments,omitempty"`
@@ -451,7 +523,7 @@ type PlaceResponse struct {
 
 func (x *PlaceResponse) Reset() {
 	*x = PlaceResponse{}
-	mi := &file_gpupack_v1_solver_proto_msgTypes[5]
+	mi := &file_gpupack_v1_solver_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -463,7 +535,7 @@ func (x *PlaceResponse) String() string {
 func (*PlaceResponse) ProtoMessage() {}
 
 func (x *PlaceResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_gpupack_v1_solver_proto_msgTypes[5]
+	mi := &file_gpupack_v1_solver_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -476,7 +548,7 @@ func (x *PlaceResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PlaceResponse.ProtoReflect.Descriptor instead.
 func (*PlaceResponse) Descriptor() ([]byte, []int) {
-	return file_gpupack_v1_solver_proto_rawDescGZIP(), []int{5}
+	return file_gpupack_v1_solver_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *PlaceResponse) GetAssignments() []*Assignment {
@@ -538,7 +610,7 @@ type Movable struct {
 
 func (x *Movable) Reset() {
 	*x = Movable{}
-	mi := &file_gpupack_v1_solver_proto_msgTypes[6]
+	mi := &file_gpupack_v1_solver_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -550,7 +622,7 @@ func (x *Movable) String() string {
 func (*Movable) ProtoMessage() {}
 
 func (x *Movable) ProtoReflect() protoreflect.Message {
-	mi := &file_gpupack_v1_solver_proto_msgTypes[6]
+	mi := &file_gpupack_v1_solver_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -563,7 +635,7 @@ func (x *Movable) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Movable.ProtoReflect.Descriptor instead.
 func (*Movable) Descriptor() ([]byte, []int) {
-	return file_gpupack_v1_solver_proto_rawDescGZIP(), []int{6}
+	return file_gpupack_v1_solver_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *Movable) GetId() int32 {
@@ -633,7 +705,7 @@ type Move struct {
 
 func (x *Move) Reset() {
 	*x = Move{}
-	mi := &file_gpupack_v1_solver_proto_msgTypes[7]
+	mi := &file_gpupack_v1_solver_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -645,7 +717,7 @@ func (x *Move) String() string {
 func (*Move) ProtoMessage() {}
 
 func (x *Move) ProtoReflect() protoreflect.Message {
-	mi := &file_gpupack_v1_solver_proto_msgTypes[7]
+	mi := &file_gpupack_v1_solver_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -658,7 +730,7 @@ func (x *Move) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Move.ProtoReflect.Descriptor instead.
 func (*Move) Descriptor() ([]byte, []int) {
-	return file_gpupack_v1_solver_proto_rawDescGZIP(), []int{7}
+	return file_gpupack_v1_solver_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *Move) GetPod() int32 {
@@ -697,7 +769,7 @@ type DefragRequest struct {
 
 func (x *DefragRequest) Reset() {
 	*x = DefragRequest{}
-	mi := &file_gpupack_v1_solver_proto_msgTypes[8]
+	mi := &file_gpupack_v1_solver_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -709,7 +781,7 @@ func (x *DefragRequest) String() string {
 func (*DefragRequest) ProtoMessage() {}
 
 func (x *DefragRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_gpupack_v1_solver_proto_msgTypes[8]
+	mi := &file_gpupack_v1_solver_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -722,7 +794,7 @@ func (x *DefragRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DefragRequest.ProtoReflect.Descriptor instead.
 func (*DefragRequest) Descriptor() ([]byte, []int) {
-	return file_gpupack_v1_solver_proto_rawDescGZIP(), []int{8}
+	return file_gpupack_v1_solver_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *DefragRequest) GetNodes() []*Node {
@@ -788,7 +860,7 @@ type DefragResponse struct {
 
 func (x *DefragResponse) Reset() {
 	*x = DefragResponse{}
-	mi := &file_gpupack_v1_solver_proto_msgTypes[9]
+	mi := &file_gpupack_v1_solver_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -800,7 +872,7 @@ func (x *DefragResponse) String() string {
 func (*DefragResponse) ProtoMessage() {}
 
 func (x *DefragResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_gpupack_v1_solver_proto_msgTypes[9]
+	mi := &file_gpupack_v1_solver_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -813,7 +885,7 @@ func (x *DefragResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DefragResponse.ProtoReflect.Descriptor instead.
 func (*DefragResponse) Descriptor() ([]byte, []int) {
-	return file_gpupack_v1_solver_proto_rawDescGZIP(), []int{9}
+	return file_gpupack_v1_solver_proto_rawDescGZIP(), []int{10}
 }
 
 func (x *DefragResponse) GetMoves() []*Move {
@@ -866,7 +938,7 @@ type HealthRequest struct {
 
 func (x *HealthRequest) Reset() {
 	*x = HealthRequest{}
-	mi := &file_gpupack_v1_solver_proto_msgTypes[10]
+	mi := &file_gpupack_v1_solver_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -878,7 +950,7 @@ func (x *HealthRequest) String() string {
 func (*HealthRequest) ProtoMessage() {}
 
 func (x *HealthRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_gpupack_v1_solver_proto_msgTypes[10]
+	mi := &file_gpupack_v1_solver_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -891,7 +963,7 @@ func (x *HealthRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use HealthRequest.ProtoReflect.Descriptor instead.
 func (*HealthRequest) Descriptor() ([]byte, []int) {
-	return file_gpupack_v1_solver_proto_rawDescGZIP(), []int{10}
+	return file_gpupack_v1_solver_proto_rawDescGZIP(), []int{11}
 }
 
 type HealthResponse struct {
@@ -903,7 +975,7 @@ type HealthResponse struct {
 
 func (x *HealthResponse) Reset() {
 	*x = HealthResponse{}
-	mi := &file_gpupack_v1_solver_proto_msgTypes[11]
+	mi := &file_gpupack_v1_solver_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -915,7 +987,7 @@ func (x *HealthResponse) String() string {
 func (*HealthResponse) ProtoMessage() {}
 
 func (x *HealthResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_gpupack_v1_solver_proto_msgTypes[11]
+	mi := &file_gpupack_v1_solver_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -928,7 +1000,7 @@ func (x *HealthResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use HealthResponse.ProtoReflect.Descriptor instead.
 func (*HealthResponse) Descriptor() ([]byte, []int) {
-	return file_gpupack_v1_solver_proto_rawDescGZIP(), []int{11}
+	return file_gpupack_v1_solver_proto_rawDescGZIP(), []int{12}
 }
 
 func (x *HealthResponse) GetVersion() string {
@@ -971,7 +1043,11 @@ const file_gpupack_v1_solver_proto_rawDesc = "" +
 	"Assignment\x12\x10\n" +
 	"\x03pod\x18\x01 \x01(\x05R\x03pod\x12\x12\n" +
 	"\x04node\x18\x02 \x01(\x05R\x04node\x12\x12\n" +
-	"\x04gpus\x18\x03 \x03(\x05R\x04gpus\"\xc0\x02\n" +
+	"\x04gpus\x18\x03 \x03(\x05R\x04gpus\"k\n" +
+	"\aPattern\x12\x12\n" +
+	"\x04node\x18\x01 \x01(\x05R\x04node\x128\n" +
+	"\vassignments\x18\x02 \x03(\v2\x16.gpupack.v1.AssignmentR\vassignments\x12\x12\n" +
+	"\x04frag\x18\x03 \x01(\x01R\x04frag\"\xf1\x02\n" +
 	"\fPlaceRequest\x12&\n" +
 	"\x05nodes\x18\x01 \x03(\v2\x10.gpupack.v1.NodeR\x05nodes\x12#\n" +
 	"\x04pods\x18\x02 \x03(\v2\x0f.gpupack.v1.PodR\x04pods\x122\n" +
@@ -981,7 +1057,8 @@ const file_gpupack_v1_solver_proto_rawDesc = "" +
 	"timeLimitS\x12$\n" +
 	"\rdeterministic\x18\x06 \x01(\bR\rdeterministic\x12\x18\n" +
 	"\aworkers\x18\a \x01(\x05R\aworkers\x12!\n" +
-	"\fgang_domains\x18\b \x01(\bR\vgangDomains\"\xe0\x01\n" +
+	"\fgang_domains\x18\b \x01(\bR\vgangDomains\x12/\n" +
+	"\bpatterns\x18\t \x03(\v2\x13.gpupack.v1.PatternR\bpatterns\"\xe0\x01\n" +
 	"\rPlaceResponse\x128\n" +
 	"\vassignments\x18\x01 \x03(\v2\x16.gpupack.v1.AssignmentR\vassignments\x12\x16\n" +
 	"\x06status\x18\x02 \x01(\tR\x06status\x12\x15\n" +
@@ -1040,43 +1117,46 @@ func file_gpupack_v1_solver_proto_rawDescGZIP() []byte {
 	return file_gpupack_v1_solver_proto_rawDescData
 }
 
-var file_gpupack_v1_solver_proto_msgTypes = make([]protoimpl.MessageInfo, 12)
+var file_gpupack_v1_solver_proto_msgTypes = make([]protoimpl.MessageInfo, 13)
 var file_gpupack_v1_solver_proto_goTypes = []any{
 	(*TypicalClass)(nil),   // 0: gpupack.v1.TypicalClass
 	(*Node)(nil),           // 1: gpupack.v1.Node
 	(*Pod)(nil),            // 2: gpupack.v1.Pod
 	(*Assignment)(nil),     // 3: gpupack.v1.Assignment
-	(*PlaceRequest)(nil),   // 4: gpupack.v1.PlaceRequest
-	(*PlaceResponse)(nil),  // 5: gpupack.v1.PlaceResponse
-	(*Movable)(nil),        // 6: gpupack.v1.Movable
-	(*Move)(nil),           // 7: gpupack.v1.Move
-	(*DefragRequest)(nil),  // 8: gpupack.v1.DefragRequest
-	(*DefragResponse)(nil), // 9: gpupack.v1.DefragResponse
-	(*HealthRequest)(nil),  // 10: gpupack.v1.HealthRequest
-	(*HealthResponse)(nil), // 11: gpupack.v1.HealthResponse
+	(*Pattern)(nil),        // 4: gpupack.v1.Pattern
+	(*PlaceRequest)(nil),   // 5: gpupack.v1.PlaceRequest
+	(*PlaceResponse)(nil),  // 6: gpupack.v1.PlaceResponse
+	(*Movable)(nil),        // 7: gpupack.v1.Movable
+	(*Move)(nil),           // 8: gpupack.v1.Move
+	(*DefragRequest)(nil),  // 9: gpupack.v1.DefragRequest
+	(*DefragResponse)(nil), // 10: gpupack.v1.DefragResponse
+	(*HealthRequest)(nil),  // 11: gpupack.v1.HealthRequest
+	(*HealthResponse)(nil), // 12: gpupack.v1.HealthResponse
 }
 var file_gpupack_v1_solver_proto_depIdxs = []int32{
-	1,  // 0: gpupack.v1.PlaceRequest.nodes:type_name -> gpupack.v1.Node
-	2,  // 1: gpupack.v1.PlaceRequest.pods:type_name -> gpupack.v1.Pod
-	0,  // 2: gpupack.v1.PlaceRequest.classes:type_name -> gpupack.v1.TypicalClass
-	3,  // 3: gpupack.v1.PlaceRequest.hint:type_name -> gpupack.v1.Assignment
-	3,  // 4: gpupack.v1.PlaceResponse.assignments:type_name -> gpupack.v1.Assignment
-	1,  // 5: gpupack.v1.DefragRequest.nodes:type_name -> gpupack.v1.Node
-	2,  // 6: gpupack.v1.DefragRequest.blocked:type_name -> gpupack.v1.Pod
-	6,  // 7: gpupack.v1.DefragRequest.movable:type_name -> gpupack.v1.Movable
-	7,  // 8: gpupack.v1.DefragResponse.moves:type_name -> gpupack.v1.Move
-	3,  // 9: gpupack.v1.DefragResponse.placements:type_name -> gpupack.v1.Assignment
-	4,  // 10: gpupack.v1.Solver.Place:input_type -> gpupack.v1.PlaceRequest
-	8,  // 11: gpupack.v1.Solver.Defrag:input_type -> gpupack.v1.DefragRequest
-	10, // 12: gpupack.v1.Solver.Health:input_type -> gpupack.v1.HealthRequest
-	5,  // 13: gpupack.v1.Solver.Place:output_type -> gpupack.v1.PlaceResponse
-	9,  // 14: gpupack.v1.Solver.Defrag:output_type -> gpupack.v1.DefragResponse
-	11, // 15: gpupack.v1.Solver.Health:output_type -> gpupack.v1.HealthResponse
-	13, // [13:16] is the sub-list for method output_type
-	10, // [10:13] is the sub-list for method input_type
-	10, // [10:10] is the sub-list for extension type_name
-	10, // [10:10] is the sub-list for extension extendee
-	0,  // [0:10] is the sub-list for field type_name
+	3,  // 0: gpupack.v1.Pattern.assignments:type_name -> gpupack.v1.Assignment
+	1,  // 1: gpupack.v1.PlaceRequest.nodes:type_name -> gpupack.v1.Node
+	2,  // 2: gpupack.v1.PlaceRequest.pods:type_name -> gpupack.v1.Pod
+	0,  // 3: gpupack.v1.PlaceRequest.classes:type_name -> gpupack.v1.TypicalClass
+	3,  // 4: gpupack.v1.PlaceRequest.hint:type_name -> gpupack.v1.Assignment
+	4,  // 5: gpupack.v1.PlaceRequest.patterns:type_name -> gpupack.v1.Pattern
+	3,  // 6: gpupack.v1.PlaceResponse.assignments:type_name -> gpupack.v1.Assignment
+	1,  // 7: gpupack.v1.DefragRequest.nodes:type_name -> gpupack.v1.Node
+	2,  // 8: gpupack.v1.DefragRequest.blocked:type_name -> gpupack.v1.Pod
+	7,  // 9: gpupack.v1.DefragRequest.movable:type_name -> gpupack.v1.Movable
+	8,  // 10: gpupack.v1.DefragResponse.moves:type_name -> gpupack.v1.Move
+	3,  // 11: gpupack.v1.DefragResponse.placements:type_name -> gpupack.v1.Assignment
+	5,  // 12: gpupack.v1.Solver.Place:input_type -> gpupack.v1.PlaceRequest
+	9,  // 13: gpupack.v1.Solver.Defrag:input_type -> gpupack.v1.DefragRequest
+	11, // 14: gpupack.v1.Solver.Health:input_type -> gpupack.v1.HealthRequest
+	6,  // 15: gpupack.v1.Solver.Place:output_type -> gpupack.v1.PlaceResponse
+	10, // 16: gpupack.v1.Solver.Defrag:output_type -> gpupack.v1.DefragResponse
+	12, // 17: gpupack.v1.Solver.Health:output_type -> gpupack.v1.HealthResponse
+	15, // [15:18] is the sub-list for method output_type
+	12, // [12:15] is the sub-list for method input_type
+	12, // [12:12] is the sub-list for extension type_name
+	12, // [12:12] is the sub-list for extension extendee
+	0,  // [0:12] is the sub-list for field type_name
 }
 
 func init() { file_gpupack_v1_solver_proto_init() }
@@ -1090,7 +1170,7 @@ func file_gpupack_v1_solver_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_gpupack_v1_solver_proto_rawDesc), len(file_gpupack_v1_solver_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   12,
+			NumMessages:   13,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

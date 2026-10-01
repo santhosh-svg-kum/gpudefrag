@@ -135,3 +135,65 @@ def test_random_instances_feasible_and_not_worse_than_hint(data):
     assert got >= want
     if got == want:
         assert frag <= hfrag + 1.0
+
+
+def all_patterns(nodes, pods):
+    """Every feasible (subset, GPU assignment) per node with its exact frag."""
+    out = []
+    for n in nodes:
+        base = NodeState(n.cpu_left, n.mem_left, list(n.gpu_left), list(n.class_access))
+        cands = [p for p in pods if n.id in p.candidates]
+
+        def rec(i, state, asg):
+            if i == len(cands):
+                out.append(pb.Pattern(node=n.id, assignments=list(asg), frag=node_frag(state, py_classes())))
+                return
+            rec(i + 1, state, asg)  # skip pod i
+            p = cands[i]
+            if state.cpu < p.cpu or state.mem < p.mem:
+                return
+            for gs in itertools.combinations(range(len(state.gpus)), p.gpu_num):
+                if all(state.gpus[g] >= p.gpu_milli for g in gs):
+                    nxt = NodeState(state.cpu - p.cpu, state.mem - p.mem, list(state.gpus), state.access)
+                    for g in gs:
+                        nxt.gpus[g] -= p.gpu_milli
+                    rec(i + 1, nxt, asg + [pb.Assignment(pod=p.id, node=n.id, gpus=list(gs))])
+
+        rec(0, base, [])
+    return out
+
+
+def test_pattern_mode_matches_brute_force():
+    nodes = [node(0, [1000, 600]), node(1, [1000, 1000]), node(2, [300, 1000])]
+    pods = [pod(0, 1000, 1, 400, [0, 1, 2]), pod(1, 1000, 1, 600, [0, 1, 2]),
+            pod(2, 2000, 1, 1000, [0, 1, 2]), pod(3, 500, 1, 300, [0, 2])]
+    req = request(nodes, pods)
+    req.patterns.extend(all_patterns(nodes, pods))
+    resp = solve_place(req)
+    assert resp.status == "OPTIMAL"
+    placed, frag = objective(nodes, pods, resp.assignments)
+    best = brute_force(nodes, pods)
+    assert placed == best[0] and abs(frag + best[1]) < 1e-3
+
+
+def test_pattern_mode_uses_one_pattern_per_node_and_each_pod_once():
+    nodes = [node(0, [1000]), node(1, [1000])]
+    pods = [pod(0, 1000, 1, 1000, [0, 1]), pod(1, 1000, 1, 1000, [0, 1])]
+    req = request(nodes, pods)
+    req.patterns.extend(all_patterns(nodes, pods))
+    resp = solve_place(req)
+    assert sorted(a.pod for a in resp.assignments) == [0, 1]
+    assert sorted(a.node for a in resp.assignments) == [0, 1]
+
+
+def test_pattern_mode_only_uses_given_patterns():
+    nodes = [node(0, [1000]), node(1, [1000])]
+    pods = [pod(0, 1000, 1, 1000, [0, 1]), pod(1, 1000, 1, 1000, [0, 1])]
+    req = request(nodes, pods)
+    req.patterns.extend([
+        pb.Pattern(node=0, frag=1000), pb.Pattern(node=1, frag=1000),
+        pb.Pattern(node=1, frag=0, assignments=[pb.Assignment(pod=0, node=1, gpus=[0])]),
+    ])
+    resp = solve_place(req)
+    assert [(a.pod, a.node) for a in resp.assignments] == [(0, 1)]
+    assert abs(resp.frag - 1000) < 1e-6

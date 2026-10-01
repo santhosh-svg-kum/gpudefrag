@@ -26,31 +26,80 @@ type Curve [131]float64
 type RunConfig struct {
 	Nodes  []*model.NodeRes
 	Pods   []model.Pod
-	Policy string
+	Policy string // baseline name; ignored when Placer is set
 	Seed   int64
 	Ratio  float64 // workload inflation, 1.3 in FGD's experiments
+	// Placer, if set, places Batch consecutive arrivals at a time (gpupack).
+	Placer BatchPlacer
+	Batch  int
+}
+
+// BatchPlacer places a batch of pods in one decision.
+type BatchPlacer interface {
+	PlaceBatch(c *sim.Cluster, pods []model.Pod) []bool
+}
+
+// Result is one run's samples plus how many pods (and GPU milli) never placed.
+type Result struct {
+	Samples     []Sample
+	FailedPods  int
+	FailedMilli int64
+	ArrivedPods int
 }
 
 // Run replays one seeded arrival sequence and samples allocation after every
-// pod, including pods that fail to place (FGD's "[Alloc]" log lines).
+// pod (or batch), including pods that fail to place (FGD's "[Alloc]" lines).
 func Run(cfg RunConfig) ([]Sample, error) {
-	pol, err := sched.New(cfg.Policy, workload.TypicalPods(cfg.Pods))
-	if err != nil {
-		return nil, err
-	}
+	r, err := RunDetailed(cfg)
+	return r.Samples, err
+}
+
+func RunDetailed(cfg RunConfig) (Result, error) {
 	c := sim.NewCluster(cfg.Nodes)
 	rng := rand.New(rand.NewSource(cfg.Seed))
 	pods := workload.Prepare(rng, cfg.Pods, c.TotalGpuMilli(), cfg.Ratio)
+	res := Result{Samples: make([]Sample, 1, len(pods)+1), ArrivedPods: len(pods)}
 
-	out := make([]Sample, 0, len(pods)+1)
-	out = append(out, Sample{})
-	var arrived int64
-	for _, p := range pods {
-		arrived += p.Res.TotalMilliGpu()
-		sched.Place(c, pol, p, rng)
-		out = append(out, Sample{Arrived: arrived, Used: c.UsedGpuMilli()})
+	placer := cfg.Placer
+	batch := cfg.Batch
+	if placer == nil {
+		pol, err := sched.New(cfg.Policy, workload.TypicalPods(cfg.Pods))
+		if err != nil {
+			return res, err
+		}
+		placer = policyPlacer{pol, rng}
+		batch = 1
 	}
-	return out, nil
+	batch = max(batch, 1)
+	var arrived int64
+	for lo := 0; lo < len(pods); lo += batch {
+		b := pods[lo:min(lo+batch, len(pods))]
+		for _, p := range b {
+			arrived += p.Res.TotalMilliGpu()
+		}
+		for i, ok := range placer.PlaceBatch(c, b) {
+			if !ok {
+				res.FailedPods++
+				res.FailedMilli += b[i].Res.TotalMilliGpu()
+			}
+		}
+		res.Samples = append(res.Samples, Sample{Arrived: arrived, Used: c.UsedGpuMilli()})
+	}
+	return res, nil
+}
+
+// policyPlacer adapts a one-pod-at-a-time baseline to BatchPlacer.
+type policyPlacer struct {
+	pol sched.Policy
+	rng *rand.Rand
+}
+
+func (p policyPlacer) PlaceBatch(c *sim.Cluster, pods []model.Pod) []bool {
+	out := make([]bool, len(pods))
+	for i, pod := range pods {
+		_, _, out[i] = sched.Place(c, p.pol, pod, p.rng)
+	}
+	return out
 }
 
 func round2(x float64) float64 { return math.RoundToEven(x*100) / 100 }

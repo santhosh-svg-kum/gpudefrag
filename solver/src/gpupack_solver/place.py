@@ -27,15 +27,20 @@ def _params(req, budget):
 
 
 class _Model:
-    def __init__(self, req):
+    """with_frag=False builds only assignment + capacity (phase 1)."""
+
+    def __init__(self, req, with_frag=True):
         self.req = req
         self.m = cp_model.CpModel()
         self.nodes = {n.id: n for n in req.nodes}
         self.x = {}  # (pod, node) -> bool
         self.y = {}  # (pod, node, gpu) -> bool
         self.placed = {}  # pod -> bool
+        # aux hints: (var, fn(L: dict[(node,g)]->int, C: dict[node]->int) -> int)
+        self.aux = []
+        self.frag_terms = []
         self._build_assignment()
-        self._build_frag()
+        self._build_capacity(with_frag)
 
     def _build_assignment(self):
         m = self.m
@@ -60,10 +65,9 @@ class _Model:
             m.Add(sum(xs) == s)
             self.placed[p.id] = s
 
-    def _build_frag(self):
+    def _build_capacity(self, with_frag):
         m, req = self.m, self.req
         pods = {p.id: p for p in req.pods}
-        self.frag_terms = []
         touched = {nid for (_, nid) in self.x}
         for nid in sorted(touched):
             n = self.nodes[nid]
@@ -76,7 +80,10 @@ class _Model:
                 use = [pods[pid].gpu_milli * v for (pid, k, gg), v in self.y.items() if k == nid and gg == g]
                 lv = m.NewIntVar(0, left, f"L{nid}_{g}")
                 m.Add(lv == left - sum(use))
+                self.aux.append((lv, lambda Lv, Cv, k=(nid, g): Lv[k]))
                 L.append(lv)
+            if not with_frag:
+                continue
             total_w = sum(round(c.pct * SCALE) for c in req.classes)
             self.frag_terms.append(total_w * sum(L))
             if not L:
@@ -89,12 +96,15 @@ class _Model:
                 mu = c.gpu_milli
                 bs, ws = [], []
                 for g, lv in enumerate(L):
+                    k = (nid, g)
                     bv = m.NewBoolVar("")
+                    self.aux.append((bv, lambda Lv, Cv, k=k, mu=mu: int(Lv[k] >= mu)))
                     m.Add(lv >= mu).OnlyEnforceIf(bv)
                     m.Add(lv <= mu - 1).OnlyEnforceIf(bv.Not())
                     wv = m.NewIntVar(0, n.gpu_left[g], "")
                     m.Add(wv == lv).OnlyEnforceIf(bv)
                     m.Add(wv == 0).OnlyEnforceIf(bv.Not())
+                    self.aux.append((wv, lambda Lv, Cv, k=k, mu=mu: Lv[k] if Lv[k] >= mu else 0))
                     bs.append(bv)
                     ws.append(wv)
                 b[mu], U[mu] = bs, sum(ws)
@@ -105,16 +115,31 @@ class _Model:
                 w = round(c.pct * SCALE)
                 if w == 0:
                     continue
+                G = len(L)
+
+                def host_v(Lv, Cv, nid=nid, mu=c.gpu_milli, num=c.gpu_num, G=G):
+                    return int(sum(Lv[nid, g] >= mu for g in range(G)) >= num)
+
+                def ok_v(Lv, Cv, nid=nid, cpu_need=c.cpu, host_v=host_v):
+                    return int(host_v(Lv, Cv) and Cv[nid] >= cpu_need)
+
+                def z_v(Lv, Cv, nid=nid, mu=c.gpu_milli, G=G, ok_v=ok_v):
+                    return sum(Lv[nid, g] for g in range(G) if Lv[nid, g] >= mu) if ok_v(Lv, Cv) else 0
+
                 host = m.NewBoolVar("")
+                self.aux.append((host, host_v))
                 m.Add(sum(b[c.gpu_milli]) >= c.gpu_num).OnlyEnforceIf(host)
                 m.Add(sum(b[c.gpu_milli]) <= c.gpu_num - 1).OnlyEnforceIf(host.Not())
                 cpu_ok = m.NewBoolVar("")
+                self.aux.append((cpu_ok, lambda Lv, Cv, nid=nid, need=c.cpu: int(Cv[nid] >= need)))
                 m.Add(cpu >= c.cpu).OnlyEnforceIf(cpu_ok)
                 m.Add(cpu <= c.cpu - 1).OnlyEnforceIf(cpu_ok.Not())
                 ok = m.NewBoolVar("")
+                self.aux.append((ok, ok_v))
                 m.AddBoolAnd([host, cpu_ok]).OnlyEnforceIf(ok)
                 m.AddBoolOr([host.Not(), cpu_ok.Not()]).OnlyEnforceIf(ok.Not())
                 z = m.NewIntVar(0, cap, "")
+                self.aux.append((z, z_v))
                 m.Add(z == U[c.gpu_milli]).OnlyEnforceIf(ok)
                 m.Add(z == 0).OnlyEnforceIf(ok.Not())
                 self.frag_terms.append(-w * z)
@@ -133,6 +158,18 @@ class _Model:
             self.m.AddHint(y, key in gpus)
         for pid, s in self.placed.items():
             self.m.AddHint(s, any(a.pod == pid for a in assignments))
+        if not self.aux:
+            return
+        pods = {p.id: p for p in self.req.pods}
+        Lv = {(n.id, g): left for n in self.req.nodes for g, left in enumerate(n.gpu_left)}
+        Cv = {n.id: n.cpu_left for n in self.req.nodes}
+        for a in assignments:
+            p = pods[a.pod]
+            Cv[a.node] -= p.cpu
+            for g in a.gpus:
+                Lv[a.node, g] -= p.gpu_milli
+        for var, fn in self.aux:
+            self.m.AddHint(var, fn(Lv, Cv))
 
     def extract(self, solver):
         out = []
@@ -143,24 +180,77 @@ class _Model:
         return out
 
 
-def solve_place(req: pb.PlaceRequest) -> pb.PlaceResponse:
+def solve_patterns(req: pb.PlaceRequest) -> pb.PlaceResponse:
+    """Column formulation: pick exactly one pattern per node, each pod at most
+    once; maximize placed weight, then minimize total fragmentation."""
     t0 = time.monotonic()
-    mdl = _Model(req)
-    m = mdl.m
     budget = req.time_limit_s or 0.5
-    if req.hint:
-        mdl.add_hint(req.hint)
+    weight = {p.id: p.weight for p in req.pods}
+    m = cp_model.CpModel()
+    u = [m.NewBoolVar("") for _ in req.patterns]
+    by_node, by_pod = {}, {}
+    for v, pat in zip(u, req.patterns):
+        by_node.setdefault(pat.node, []).append(v)
+        for a in pat.assignments:
+            by_pod.setdefault(a.pod, []).append(v)
+    for vs in by_node.values():
+        m.AddExactlyOne(vs)
+    for vs in by_pod.values():
+        m.AddAtMostOne(vs)
+    placed = sum(v * sum(weight[a.pod] for a in pat.assignments) for v, pat in zip(u, req.patterns))
+    frag = sum(v * round(pat.frag * 1000) for v, pat in zip(u, req.patterns))
 
-    placed = mdl.placed_expr()
+    hinted = {(a.pod, a.node, tuple(a.gpus)) for a in req.hint}
+    for v, pat in zip(u, req.patterns):
+        mine = {(a.pod, a.node, tuple(a.gpus)) for a in pat.assignments}
+        node_hint = {h for h in hinted if h[1] == pat.node}
+        m.AddHint(v, mine == node_hint)
+
     m.Maximize(placed)
     s1 = _params(req, 0.4 * budget)
     st1 = s1.Solve(m)
     if st1 not in (cp_model.OPTIMAL, cp_model.FEASIBLE):
         return pb.PlaceResponse(status=s1.StatusName(st1), wall_s=time.monotonic() - t0)
-    best_placed = int(s1.ObjectiveValue())
-    phase1 = mdl.extract(s1)
+    best = int(round(s1.ObjectiveValue()))
+    m.ClearHints()
+    for v in u:
+        m.AddHint(v, s1.BooleanValue(v))
+    m.Add(placed >= best)
+    m.Minimize(frag)
+    s2 = _params(req, budget - (time.monotonic() - t0))
+    st2 = s2.Solve(m)
+    sol = s2 if st2 in (cp_model.OPTIMAL, cp_model.FEASIBLE) else s1
+    status = s2.StatusName(st2) if sol is s2 else "FEASIBLE"
+    if sol is s2 and st1 != cp_model.OPTIMAL and status == "OPTIMAL":
+        status = "FEASIBLE"
+    asg = [a for v, pat in zip(u, req.patterns) if sol.BooleanValue(v) for a in pat.assignments]
+    return pb.PlaceResponse(
+        assignments=asg, status=status, wall_s=time.monotonic() - t0,
+        deterministic_time=s1.deterministic_time + (s2.deterministic_time if sol is s2 else 0),
+        frag=sum(pat.frag for v, pat in zip(u, req.patterns) if sol.BooleanValue(v)),
+        placed_weight=best)
 
-    m.Add(placed >= best_placed)
+
+def solve_place(req: pb.PlaceRequest) -> pb.PlaceResponse:
+    if req.patterns:
+        return solve_patterns(req)
+    t0 = time.monotonic()
+    budget = req.time_limit_s or 0.5
+
+    p1 = _Model(req, with_frag=False)
+    if req.hint:
+        p1.add_hint(req.hint)
+    p1.m.Maximize(p1.placed_expr())
+    s1 = _params(req, 0.3 * budget)
+    st1 = s1.Solve(p1.m)
+    if st1 not in (cp_model.OPTIMAL, cp_model.FEASIBLE):
+        return pb.PlaceResponse(status=s1.StatusName(st1), wall_s=time.monotonic() - t0)
+    best_placed = int(s1.ObjectiveValue())
+    phase1 = p1.extract(s1)
+
+    mdl = _Model(req, with_frag=True)
+    m = mdl.m
+    m.Add(mdl.placed_expr() >= best_placed)
     mdl.add_hint(phase1)
     m.Minimize(sum(mdl.frag_terms))
     s2 = _params(req, budget - (time.monotonic() - t0))

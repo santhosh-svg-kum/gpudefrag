@@ -16,6 +16,8 @@ func main() {
 	switch os.Args[1] {
 	case "calib":
 		err = runCalib(os.Args[2:])
+	case "suite1a":
+		err = runSuite1a(os.Args[2:])
 	default:
 		usage()
 	}
@@ -26,6 +28,6 @@ func main() {
 }
 
 func usage() {
-	fmt.Fprintln(os.Stderr, "usage: gpupack-sim calib [flags]")
+	fmt.Fprintln(os.Stderr, "usage: gpupack-sim calib|suite1a [flags]")
 	os.Exit(2)
 }

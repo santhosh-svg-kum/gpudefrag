@@ -46,6 +46,16 @@ message Assignment {
   repeated int32 gpus = 3;
 }
 
+// A pattern is one way to fill one node with a subset of the batch, with its
+// exact post-placement fragmentation precomputed by the caller (column
+// formulation). When patterns are present the solver picks exactly one
+// pattern per node instead of building the direct model.
+message Pattern {
+  int32 node = 1;
+  repeated Assignment assignments = 2;  // pods placed on `node` and their GPUs
+  double frag = 3;                      // node fragmentation after placement, milli-GPU
+}
+
 message PlaceRequest {
   repeated Node nodes = 1;
   repeated Pod pods = 2;
@@ -55,6 +65,7 @@ message PlaceRequest {
   bool deterministic = 6;
   int32 workers = 7;
   bool gang_domains = 8;  // gangs must stay within one domain (M4)
+  repeated Pattern patterns = 9;
 }
 
 message PlaceResponse {
