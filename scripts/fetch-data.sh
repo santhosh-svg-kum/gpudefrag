@@ -13,7 +13,7 @@ fetch data/csv/openb_pod_list_default.csv openb/openb_pod_list_default.csv
 fetch experiments/analysis/expected_results/analysis_allo_discrete.csv ref/analysis_allo_discrete.csv
 # HeliosData (SenseTime, SC '21), CC-BY-4.0: GPU job traces with gang sizes.
 mkdir -p "$DIR/helios"
-[ -s "$DIR/helios/data.zip" ] || curl -fsSL https://media.githubusercontent.com/media/S-Lab-System-Group/HeliosData/master/data.zip -o "$DIR/helios/data.zip"
+[ -s "$DIR/helios/data.zip" ] || curl -fsSL https://raw.githubusercontent.com/S-Lab-System-Group/HeliosData/master/data.zip -o "$DIR/helios/data.zip"
 cd "$DIR" && shasum -a 256 -c <<'SUMS'
 2beca64b4d3dfa342036a34b56a495c6cef9225db836c81f541282cb1df320b5  openb/openb_node_list_gpu_node.csv
 1ee7ed79c27a3b0861cda8ddba86a004c6aba904caafa329a76ae93ca63834a8  openb/openb_pod_list_default.csv
