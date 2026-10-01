@@ -27,6 +27,7 @@ type Stats struct {
 	Batches   int
 	Improved  int            // batches where the solver beat FGD
 	Fallbacks map[string]int // rpc, status, invalid
+	NoFit     int            // batches where no pod fit any node (nothing to solve)
 	SolveWall []time.Duration
 }
 
@@ -139,7 +140,9 @@ func (pl *Placer) DecideRequests(c *sim.Cluster, reqs []Request) [][]*Choice {
 	}
 
 	best := hint
-	if sol, reason := pl.solve(c, b, hint, fgd); reason != "" {
+	if sol, reason := pl.solve(c, b, hint, fgd); reason == "empty" {
+		pl.Stats.NoFit++
+	} else if reason != "" {
 		pl.Stats.Fallbacks[reason]++
 	} else if better(c, b.pods, sol, hint, pl.Typical) {
 		best = sol
