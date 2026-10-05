@@ -127,7 +127,7 @@ The design decisions that matter:
 | `calib/` | FGD-protocol runner and calibration gate |
 | `solver/` | Python CP-SAT service (`uv run pytest` for its tests) |
 | `cmd/gpudefrag-sim` | `calib`, `suite1a`, `suite1b`, `suite2` |
-| `docs/` | `RESULTS.md` (benchmarks), `design/` (spec and per-milestone plans), `PROGRESS.md` (build log) |
+| `docs/` | `RESULTS.md` (benchmarks), `design/` (spec and per-milestone plans) |
 
 ## License and attribution
 
