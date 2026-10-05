@@ -3,14 +3,16 @@
 - **Date:** 2026-09-30
 - **Status:** Draft, awaiting review
 - **License:** Apache-2.0
-- **Origin:** Implements the modeled tier (phases 2–4, scoped down) of
-  an internal discrete-event simulation design for Kubernetes scheduling and autoscaling and adds a solver-based
-  GPU scheduler and defragmenter on top of it.
+- **Origin:** A personal open-source project, unrelated to any employer.
+  It implements the modeled tier (phases 2–4, scoped down) of the author's
+  own draft design for simulating Kubernetes scheduling and autoscaling, and
+  adds a solver-based GPU scheduler and defragmenter on top of it. All
+  results use public traces (Alibaba openb, SenseTime Helios).
 
 ## 1. Purpose and success criteria
 
 gpudefrag is an open-source, fragmentation-aware GPU scheduler that uses a
-mixed-integer solver (OR-Tools CP-SAT), plus a discrete-event simulator (DES)
+constraint solver (OR-Tools CP-SAT), plus a discrete-event simulator (DES)
 to benchmark it reproducibly against published baselines.
 
 v1 is successful when one command per suite produces a report that supports a
@@ -87,11 +89,11 @@ type Defragmenter interface {
 ```
 
 Interfaces for v2 (`NodeAutoscaler.Provision/Disrupt`, `CloudProvider`) are
-reserved as the doc's §8.1 describes. v1 neither defines nor stubs them.
+reserved for v2, as the author's simulation design draft describes. v1 neither defines nor stubs them.
 
 ## 4. Simulation engine
 
-This follows the design doc's §7, restricted to v1 events.
+This follows the author's simulation design draft, restricted to v1 events.
 
 - **Events:** `PodArrived`, `PodCompleted`, `SchedulerSession`, `BindAttempt`,
   `DefragTick`, `EvictionDone`, and `PodRestarted`.
