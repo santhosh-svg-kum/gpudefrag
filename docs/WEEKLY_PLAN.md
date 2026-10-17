@@ -1,0 +1,11 @@
+# Weekly plan
+
+## Week 1
+
+- [x] 1. CI hardening: in .github/workflows/ci.yml pin runs-on to ubuntu-24.04 (ubuntu-latest moves to Ubuntu 26 on 2026-10-19), add timeout-minutes (test: 15, calibration: 20), and a concurrency group that cancels superseded runs on the same ref.
+- [ ] 2. Docs wording: README says 'places GPU pods with a mixed-integer solver (OR-Tools CP-SAT)'; change to 'a constraint solver (OR-Tools CP-SAT)'. Change the FGD warm start bullet's 'so it is **never worse than FGD on a batch**' to 'so each batch decision is **never worse than FGD by the batch objective** (this is a per-decision guarantee, not a long-run one; see RESULTS.md section 2)'. In docs/RESULTS.md summary table, change the suite 1a evidence cell to '+0.28 +/- 0.12 pp at 130% load (paired by seed), better on 10/10 seeds' (use the real plus-minus character). Verify every number against results/*/report.md before changing.
+- [ ] 3. Solve-time breakdown: record pattern generation, model build, RPC, and CP-SAT search time separately (Go side timers in mip/placer.go next to Stats.SolveWall; solver-reported wall/search time in the response if the proto already has room, otherwise add an optional field) and surface p50/p99 of each in the suite reports. Tests for the stats plumbing.
+- [ ] 4. Add BenchmarkGenPatterns (mip/patterns.go genPatterns) and parallelize per-node pattern generation with a bounded goroutine pool. A test must prove the output is identical (same patterns, same order) to the serial version. Put before/after ns/op in the PR body.
+- [ ] 5. Make defrag restart time configurable: Restart is hard-coded to 60 in cmd/gpudefrag-sim/suite1b.go and suite2.go; add a -restart flag (default 60, unchanged behavior) and a -restart-sweep option (60,300,900) wiring into timed.DefragConfig. Tests.
+- [ ] 6. Model the eviction grace period in timed defrag (pods evicted terminate over a grace period, default 0 = current behavior; flag -grace, e.g. 30s, delays the blocked pod's bind). Tests.
+- [ ] 7. Gang warm-start: option for the MIP placer to warm-start from the better (by the batch objective) of Binpack and FGD placements, behind a flag defaulting off. Tests. Then write next week's 7 tasks into docs/WEEKLY_PLAN.md (new week heading).
