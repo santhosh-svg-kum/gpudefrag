@@ -4,15 +4,17 @@
 
 **Solver-backed GPU scheduling, with reproducible benchmarks against published baselines.**
 
-gpudefrag places GPU pods with a mixed-integer solver (OR-Tools CP-SAT). Three
+gpudefrag places GPU pods with a constraint solver (OR-Tools CP-SAT). Three
 pieces do the work:
 
 - **Batch placement.** gpudefrag optimizes FGD's own fragmentation measure
   ([Weng et al., USENIX ATC '23](https://www.usenix.org/conference/atc23/presentation/weng))
   jointly over a batch of pending pods, instead of greedily one pod at a time.
 - **FGD warm start.** Each solve starts from FGD's answer. gpudefrag validates
-  every solver result and keeps whichever of the two is better, so it is
-  **never worse than FGD on a batch**.
+  every solver result and keeps whichever of the two is better, so each batch
+  decision is **never worse than FGD by the batch objective** (this is a
+  per-decision guarantee, not a long-run one; see
+  [RESULTS.md](docs/RESULTS.md) section 2).
 - **Demand-driven defragmentation.** When a pending pod is blocked only
   because free GPUs are scattered, gpudefrag finds the cheapest set of
   migrations that frees room for it. A migration's cost is the work lost
