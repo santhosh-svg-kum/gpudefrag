@@ -234,6 +234,42 @@ func suite1aReport(vs []variant, results map[string][]runSummary, lo, hi int64) 
 		fmt.Fprintf(&b, "| %s | %s | %s | %s | %s | %s | %s | %s | %s |\n", v.Name, col(at(100)), col(at(120)), col(at(130)),
 			col(func(r runSummary) float64 { return r.FinalAlloc }), col(func(r runSummary) float64 { return r.FailedGpuPct }), impS, solveS, fbS)
 	}
+	b.WriteString(pairedSection(vs, results))
+	return b.String()
+}
+
+// pairedSection compares each variant with FGD seed by seed at 130% load:
+// mean difference in allocation points, its 95% CI, and the number of seeds
+// where the variant is strictly better. Empty when FGD was not run.
+func pairedSection(vs []variant, results map[string][]runSummary) string {
+	base := map[int64]float64{}
+	for _, r := range results["FGD"] {
+		base[r.Seed] = r.Curve[130]
+	}
+	if len(base) == 0 {
+		return ""
+	}
+	var b strings.Builder
+	fmt.Fprintf(&b, "\n## Paired by seed vs FGD at 130%% load\n\n")
+	fmt.Fprintf(&b, "Difference in alloc@130%% (variant − FGD, pp), mean ± 95%% CI over seeds, and seeds where the variant is better.\n\n")
+	fmt.Fprintf(&b, "| variant | mean diff (pp) | seeds better |\n|---|---|---|\n")
+	for _, v := range vs {
+		if v.Name == "FGD" {
+			continue
+		}
+		var d []float64
+		wins := 0
+		for _, r := range results[v.Name] {
+			if f, ok := base[r.Seed]; ok {
+				d = append(d, r.Curve[130]-f)
+				if r.Curve[130] > f {
+					wins++
+				}
+			}
+		}
+		m, ci := meanCI(d)
+		fmt.Fprintf(&b, "| %s | %+.2f ± %.2f | %d/%d |\n", v.Name, m, ci, wins, len(d))
+	}
 	return b.String()
 }
 
