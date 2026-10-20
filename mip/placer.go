@@ -25,10 +25,16 @@ type Solver interface {
 
 type Stats struct {
 	Batches   int
-	Improved  int            // batches where the solver beat FGD
-	Fallbacks map[string]int // rpc, status, invalid
-	NoFit     int            // batches where no pod fit any node (nothing to solve)
-	SolveWall []time.Duration
+	Improved  int             // batches where the solver beat FGD
+	Fallbacks map[string]int  // rpc, status, invalid
+	NoFit     int             // batches where no pod fit any node (nothing to solve)
+	SolveWall []time.Duration // RPC round trip (kept for the existing reports)
+	// Per-solved-batch breakdown of SolveWall's surroundings: Go-side pattern
+	// generation (pattern formulation only), the RPC round trip, and the wall
+	// time the solver itself reports (model build + search, excludes transport).
+	PatternWall []time.Duration
+	RPCWall     []time.Duration
+	SolverWall  []time.Duration
 }
 
 type Placer struct {
@@ -52,7 +58,7 @@ type Placer struct {
 	// ObjectiveTypical, if set, is the typical-pod distribution the solver
 	// optimizes (e.g. GPU-weighted); the FGD hint always uses Typical.
 	ObjectiveTypical []frag.TargetPod
-	Stats          Stats
+	Stats            Stats
 }
 
 type choice struct {
@@ -227,18 +233,23 @@ func (pl *Placer) solve(c *sim.Cluster, b batch, hint []*choice, fgd sched.FGD) 
 		return nil, "empty"
 	}
 	if !pl.Direct {
+		tp := time.Now()
 		req.Patterns = pl.patterns(c, pods, ids, cands, hint)
 		req.IdleWeight = pl.IdleWeight
+		pl.Stats.PatternWall = append(pl.Stats.PatternWall, time.Since(tp))
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), pl.TimeLimit*3/2+2*time.Second)
 	defer cancel()
 	t0 := time.Now()
 	resp, err := pl.Solver.Place(ctx, req)
-	pl.Stats.SolveWall = append(pl.Stats.SolveWall, time.Since(t0))
+	rpc := time.Since(t0)
+	pl.Stats.SolveWall = append(pl.Stats.SolveWall, rpc)
+	pl.Stats.RPCWall = append(pl.Stats.RPCWall, rpc)
 	if err != nil {
 		return nil, "rpc"
 	}
+	pl.Stats.SolverWall = append(pl.Stats.SolverWall, time.Duration(resp.WallS*float64(time.Second)))
 	if resp.Status != "OPTIMAL" && resp.Status != "FEASIBLE" {
 		return nil, "status"
 	}

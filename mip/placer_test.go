@@ -189,3 +189,32 @@ func TestStartLocalStopLeavesNoServer(t *testing.T) {
 		t.Fatal("solver still answering after stop()")
 	}
 }
+
+func TestStatsRecordsSolveBreakdown(t *testing.T) {
+	c, pods, typ := trap()
+	f := &fakeSolver{resp: &pb.PlaceResponse{Status: "OPTIMAL", WallS: 0.25, Assignments: []*pb.Assignment{
+		{Pod: 0, Node: 1, Gpus: []int32{0}}, {Pod: 1, Node: 0, Gpus: []int32{0}}}}}
+	pl := placer(f, typ)
+	pl.PlaceBatch(c, pods)
+	st := pl.Stats
+	if len(st.PatternWall) != 1 || len(st.RPCWall) != 1 || len(st.SolverWall) != 1 {
+		t.Fatalf("one sample per solved batch, got %+v", st)
+	}
+	if st.SolverWall[0] != 250*time.Millisecond {
+		t.Fatalf("solver-reported wall = %v", st.SolverWall[0])
+	}
+	if len(st.SolveWall) != 1 || st.SolveWall[0] != st.RPCWall[0] {
+		t.Fatalf("SolveWall must stay the RPC wall: %+v", st)
+	}
+}
+
+func TestStatsDirectModeHasNoPatternTime(t *testing.T) {
+	c, pods, typ := trap()
+	f := &fakeSolver{resp: &pb.PlaceResponse{Status: "INFEASIBLE"}}
+	pl := placer(f, typ)
+	pl.Direct = true
+	pl.PlaceBatch(c, pods)
+	if len(pl.Stats.PatternWall) != 0 || len(pl.Stats.RPCWall) != 1 {
+		t.Fatalf("%+v", pl.Stats)
+	}
+}
