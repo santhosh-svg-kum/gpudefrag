@@ -3,6 +3,9 @@ package main
 import (
 	"strings"
 	"testing"
+	"time"
+
+	"github.com/santhosh-svg-kum/gpudefrag/mip"
 )
 
 func TestSuite1aReportPaired(t *testing.T) {
@@ -38,5 +41,28 @@ func TestSuite1aReportNoPairedWithoutFGD(t *testing.T) {
 	res := map[string][]runSummary{"BestFit": {{Seed: 42, Curve: make([]float64, 131)}}}
 	if strings.Contains(suite1aReport(vs, res, 42, 42), "Paired") {
 		t.Fatal("unexpected paired section")
+	}
+}
+
+func TestStageTimesAndBreakdownSection(t *testing.T) {
+	ms := func(n int) []time.Duration { return []time.Duration{time.Duration(n) * time.Millisecond} }
+	st := stageTimes(mip.Stats{PatternWall: ms(7), RPCWall: ms(480), SolverWall: ms(470)})
+	if st["pattern gen"].P50 != 7 || st["rpc"].P99 != 480 || st["solver"].P50 != 470 {
+		t.Fatalf("%+v", st)
+	}
+	vs := []variant{{Name: "FGD"}, {Name: "gpudefrag:b=16:t=500ms"}}
+	res := map[string][]runSummary{
+		"FGD":                    {{Seed: 42}},
+		"gpudefrag:b=16:t=500ms": {{Seed: 42, Stages: st}, {Seed: 43, Stages: map[string]stageTime{"rpc": {600, 900}}}},
+	}
+	rep := breakdownSection(vs, res)
+	if !strings.Contains(rep, "| pattern gen | rpc | solver |") || !strings.Contains(rep, "| gpudefrag:b=16:t=500ms | 7 / 7 | 600 / 900 | 470 / 470 |") {
+		t.Fatalf("bad breakdown:\n%s", rep)
+	}
+	if strings.Contains(rep, "| FGD |") {
+		t.Fatalf("FGD has no stages:\n%s", rep)
+	}
+	if breakdownSection(vs[:1], res) != "" {
+		t.Fatal("section must be empty without stage data")
 	}
 }

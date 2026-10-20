@@ -72,9 +72,10 @@ type runSummary struct {
 	Improved     int       `json:"improved_batches"`
 	Batches      int       `json:"batches"`
 	Fallbacks    map[string]int
-	SolveP50     float64 `json:"solve_p50_ms"`
-	SolveP99     float64 `json:"solve_p99_ms"`
-	WallS        float64 `json:"wall_s"`
+	SolveP50     float64              `json:"solve_p50_ms"`
+	SolveP99     float64              `json:"solve_p99_ms"`
+	Stages       map[string]stageTime `json:"solve_stages_ms,omitempty"`
+	WallS        float64              `json:"wall_s"`
 }
 
 func runSuite1a(args []string) error {
@@ -165,6 +166,7 @@ func runSuite1a(args []string) error {
 				if pl != nil {
 					s.Improved, s.Batches, s.Fallbacks = pl.Stats.Improved, pl.Stats.Batches, pl.Stats.Fallbacks
 					s.SolveP50, s.SolveP99 = pctl(pl.Stats.SolveWall, 0.5), pctl(pl.Stats.SolveWall, 0.99)
+					s.Stages = stageTimes(pl.Stats)
 				}
 				results[j.v.Name] = append(results[j.v.Name], s)
 				fmt.Fprintf(os.Stderr, "  %-28s seed %d: final %.2f%% (%.0fs)\n", j.v.Name, j.seed, s.FinalAlloc, s.WallS)
@@ -235,6 +237,51 @@ func suite1aReport(vs []variant, results map[string][]runSummary, lo, hi int64) 
 			col(func(r runSummary) float64 { return r.FinalAlloc }), col(func(r runSummary) float64 { return r.FailedGpuPct }), impS, solveS, fbS)
 	}
 	b.WriteString(pairedSection(vs, results))
+	b.WriteString(breakdownSection(vs, results))
+	return b.String()
+}
+
+// stageTime is one solve stage's p50/p99 over a run's batches, in ms.
+type stageTime struct {
+	P50 float64 `json:"p50"`
+	P99 float64 `json:"p99"`
+}
+
+// solveStages lists the breakdown stages in report order.
+var solveStages = []string{"pattern gen", "rpc", "solver"}
+
+func stageTimes(s mip.Stats) map[string]stageTime {
+	st := func(d []time.Duration) stageTime { return stageTime{pctl(d, 0.5), pctl(d, 0.99)} }
+	return map[string]stageTime{"pattern gen": st(s.PatternWall), "rpc": st(s.RPCWall), "solver": st(s.SolverWall)}
+}
+
+// breakdownSection reports each solve stage's p50 / p99 (ms), the worst
+// across seeds like the main table's solve column. Empty when no variant
+// recorded stages.
+func breakdownSection(vs []variant, results map[string][]runSummary) string {
+	var b strings.Builder
+	for _, v := range vs {
+		agg := map[string]stageTime{}
+		for _, r := range results[v.Name] {
+			for k, t := range r.Stages {
+				a := agg[k]
+				agg[k] = stageTime{max(a.P50, t.P50), max(a.P99, t.P99)}
+			}
+		}
+		if len(agg) == 0 {
+			continue
+		}
+		if b.Len() == 0 {
+			fmt.Fprintf(&b, "\n## Solve-time breakdown (p50 / p99 ms, worst seed)\n\n")
+			fmt.Fprintf(&b, "`solver` is the wall time the solver reports (model build + search); `rpc` is the Go-side round trip including it.\n\n")
+			fmt.Fprintf(&b, "| variant | %s |\n|---|%s\n", strings.Join(solveStages, " | "), strings.Repeat("---|", len(solveStages)))
+		}
+		fmt.Fprintf(&b, "| %s |", v.Name)
+		for _, k := range solveStages {
+			fmt.Fprintf(&b, " %.0f / %.0f |", agg[k].P50, agg[k].P99)
+		}
+		b.WriteString("\n")
+	}
 	return b.String()
 }
 
