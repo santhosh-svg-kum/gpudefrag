@@ -80,6 +80,7 @@ message PlaceResponse {
   double deterministic_time = 4;
   double frag = 5;            // solver's objective, milli-GPU
   int64 placed_weight = 6;
+  double search_wall_s = 7;   // CP-SAT search time only (wall_s minus model build)
 }
 
 // A running pod that the defragmenter may move (M3).

@@ -192,7 +192,7 @@ func TestStartLocalStopLeavesNoServer(t *testing.T) {
 
 func TestStatsRecordsSolveBreakdown(t *testing.T) {
 	c, pods, typ := trap()
-	f := &fakeSolver{resp: &pb.PlaceResponse{Status: "OPTIMAL", WallS: 0.25, Assignments: []*pb.Assignment{
+	f := &fakeSolver{resp: &pb.PlaceResponse{Status: "OPTIMAL", WallS: 0.25, SearchWallS: 0.2, Assignments: []*pb.Assignment{
 		{Pod: 0, Node: 1, Gpus: []int32{0}}, {Pod: 1, Node: 0, Gpus: []int32{0}}}}}
 	pl := placer(f, typ)
 	pl.PlaceBatch(c, pods)
@@ -202,6 +202,9 @@ func TestStatsRecordsSolveBreakdown(t *testing.T) {
 	}
 	if st.SolverWall[0] != 250*time.Millisecond {
 		t.Fatalf("solver-reported wall = %v", st.SolverWall[0])
+	}
+	if len(st.SearchWall) != 1 || st.SearchWall[0] != 200*time.Millisecond {
+		t.Fatalf("search wall = %v", st.SearchWall)
 	}
 	if len(st.SolveWall) != 1 || st.SolveWall[0] != st.RPCWall[0] {
 		t.Fatalf("SolveWall must stay the RPC wall: %+v", st)

@@ -35,6 +35,7 @@ type Stats struct {
 	PatternWall []time.Duration
 	RPCWall     []time.Duration
 	SolverWall  []time.Duration
+	SearchWall  []time.Duration // CP-SAT search only; SolverWall - SearchWall is model build
 }
 
 type Placer struct {
@@ -250,6 +251,7 @@ func (pl *Placer) solve(c *sim.Cluster, b batch, hint []*choice, fgd sched.FGD) 
 		return nil, "rpc"
 	}
 	pl.Stats.SolverWall = append(pl.Stats.SolverWall, time.Duration(resp.WallS*float64(time.Second)))
+	pl.Stats.SearchWall = append(pl.Stats.SearchWall, time.Duration(resp.SearchWallS*float64(time.Second)))
 	if resp.Status != "OPTIMAL" && resp.Status != "FEASIBLE" {
 		return nil, "status"
 	}

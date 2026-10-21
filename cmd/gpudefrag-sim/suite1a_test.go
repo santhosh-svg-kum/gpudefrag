@@ -46,8 +46,8 @@ func TestSuite1aReportNoPairedWithoutFGD(t *testing.T) {
 
 func TestStageTimesAndBreakdownSection(t *testing.T) {
 	ms := func(n int) []time.Duration { return []time.Duration{time.Duration(n) * time.Millisecond} }
-	st := stageTimes(mip.Stats{PatternWall: ms(7), RPCWall: ms(480), SolverWall: ms(470)})
-	if st["pattern gen"].P50 != 7 || st["rpc"].P99 != 480 || st["solver"].P50 != 470 {
+	st := stageTimes(mip.Stats{PatternWall: ms(7), RPCWall: ms(480), SolverWall: ms(470), SearchWall: ms(450)})
+	if st["pattern gen"].P50 != 7 || st["rpc"].P99 != 480 || st["solver"].P50 != 470 || st["build"].P50 != 20 || st["search"].P99 != 450 {
 		t.Fatalf("%+v", st)
 	}
 	vs := []variant{{Name: "FGD"}, {Name: "gpudefrag:b=16:t=500ms"}}
@@ -56,7 +56,7 @@ func TestStageTimesAndBreakdownSection(t *testing.T) {
 		"gpudefrag:b=16:t=500ms": {{Seed: 42, Stages: st}, {Seed: 43, Stages: map[string]stageTime{"rpc": {600, 900}}}},
 	}
 	rep := breakdownSection(vs, res)
-	if !strings.Contains(rep, "| pattern gen | rpc | solver |") || !strings.Contains(rep, "| gpudefrag:b=16:t=500ms | 7 / 7 | 600 / 900 | 470 / 470 |") {
+	if !strings.Contains(rep, "| pattern gen | rpc | solver | build | search |") || !strings.Contains(rep, "| gpudefrag:b=16:t=500ms | 7 / 7 | 600 / 900 | 470 / 470 | 20 / 20 | 450 / 450 |") {
 		t.Fatalf("bad breakdown:\n%s", rep)
 	}
 	if strings.Contains(rep, "| FGD |") {
