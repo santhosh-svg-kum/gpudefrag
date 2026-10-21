@@ -248,11 +248,18 @@ type stageTime struct {
 }
 
 // solveStages lists the breakdown stages in report order.
-var solveStages = []string{"pattern gen", "rpc", "solver"}
+var solveStages = []string{"pattern gen", "rpc", "solver", "build", "search"}
 
 func stageTimes(s mip.Stats) map[string]stageTime {
 	st := func(d []time.Duration) stageTime { return stageTime{pctl(d, 0.5), pctl(d, 0.99)} }
-	return map[string]stageTime{"pattern gen": st(s.PatternWall), "rpc": st(s.RPCWall), "solver": st(s.SolverWall)}
+	build := make([]time.Duration, len(s.SolverWall))
+	for i, w := range s.SolverWall {
+		if i < len(s.SearchWall) {
+			build[i] = max(w-s.SearchWall[i], 0)
+		}
+	}
+	return map[string]stageTime{"pattern gen": st(s.PatternWall), "rpc": st(s.RPCWall), "solver": st(s.SolverWall),
+		"build": st(build), "search": st(s.SearchWall)}
 }
 
 // breakdownSection reports each solve stage's p50 / p99 (ms), the worst
@@ -273,7 +280,7 @@ func breakdownSection(vs []variant, results map[string][]runSummary) string {
 		}
 		if b.Len() == 0 {
 			fmt.Fprintf(&b, "\n## Solve-time breakdown (p50 / p99 ms, worst seed)\n\n")
-			fmt.Fprintf(&b, "`solver` is the wall time the solver reports (model build + search); `rpc` is the Go-side round trip including it.\n\n")
+			fmt.Fprintf(&b, "`solver` is the wall time the solver reports (`build` + `search`); `search` is CP-SAT time only; `rpc` is the Go-side round trip including it.\n\n")
 			fmt.Fprintf(&b, "| variant | %s |\n|---|%s\n", strings.Join(solveStages, " | "), strings.Repeat("---|", len(solveStages)))
 		}
 		fmt.Fprintf(&b, "| %s |", v.Name)

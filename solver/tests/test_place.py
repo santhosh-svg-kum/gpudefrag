@@ -215,3 +215,9 @@ def test_idle_weight_prefers_packing_over_fragmentation():
         req.idle_weight = w
         (a,) = solve_place(req).assignments
         assert a.node == want, (w, a.node)
+
+
+def test_response_reports_search_wall_within_total():
+    resp = solve_place(request([node(0, [1000, 1000])], [pod(0, 1000, 1, 500, [0])]))
+    assert resp.status in ("OPTIMAL", "FEASIBLE")
+    assert 0 < resp.search_wall_s <= resp.wall_s

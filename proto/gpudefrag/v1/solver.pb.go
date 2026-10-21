@@ -543,6 +543,7 @@ type PlaceResponse struct {
 	DeterministicTime float64                `protobuf:"fixed64,4,opt,name=deterministic_time,json=deterministicTime,proto3" json:"deterministic_time,omitempty"`
 	Frag              float64                `protobuf:"fixed64,5,opt,name=frag,proto3" json:"frag,omitempty"` // solver's objective, milli-GPU
 	PlacedWeight      int64                  `protobuf:"varint,6,opt,name=placed_weight,json=placedWeight,proto3" json:"placed_weight,omitempty"`
+	SearchWallS       float64                `protobuf:"fixed64,7,opt,name=search_wall_s,json=searchWallS,proto3" json:"search_wall_s,omitempty"` // CP-SAT search time only (wall_s minus model build)
 	unknownFields     protoimpl.UnknownFields
 	sizeCache         protoimpl.SizeCache
 }
@@ -615,6 +616,13 @@ func (x *PlaceResponse) GetFrag() float64 {
 func (x *PlaceResponse) GetPlacedWeight() int64 {
 	if x != nil {
 		return x.PlacedWeight
+	}
+	return 0
+}
+
+func (x *PlaceResponse) GetSearchWallS() float64 {
+	if x != nil {
+		return x.SearchWallS
 	}
 	return 0
 }
@@ -1097,14 +1105,15 @@ const file_gpudefrag_v1_solver_proto_rawDesc = "" +
 	"\bpatterns\x18\t \x03(\v2\x15.gpudefrag.v1.PatternR\bpatterns\x12\x1f\n" +
 	"\vidle_weight\x18\n" +
 	" \x01(\x01R\n" +
-	"idleWeight\"\xe2\x01\n" +
+	"idleWeight\"\x86\x02\n" +
 	"\rPlaceResponse\x12:\n" +
 	"\vassignments\x18\x01 \x03(\v2\x18.gpudefrag.v1.AssignmentR\vassignments\x12\x16\n" +
 	"\x06status\x18\x02 \x01(\tR\x06status\x12\x15\n" +
 	"\x06wall_s\x18\x03 \x01(\x01R\x05wallS\x12-\n" +
 	"\x12deterministic_time\x18\x04 \x01(\x01R\x11deterministicTime\x12\x12\n" +
 	"\x04frag\x18\x05 \x01(\x01R\x04frag\x12#\n" +
-	"\rplaced_weight\x18\x06 \x01(\x03R\fplacedWeight\"\xc5\x01\n" +
+	"\rplaced_weight\x18\x06 \x01(\x03R\fplacedWeight\x12\"\n" +
+	"\rsearch_wall_s\x18\a \x01(\x01R\vsearchWallS\"\xc5\x01\n" +
 	"\aMovable\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x05R\x02id\x12\x12\n" +
 	"\x04node\x18\x02 \x01(\x05R\x04node\x12\x12\n" +

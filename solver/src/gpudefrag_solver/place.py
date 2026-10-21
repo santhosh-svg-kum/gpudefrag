@@ -248,11 +248,12 @@ def solve_patterns(req: pb.PlaceRequest) -> pb.PlaceResponse:
     s.parameters.cp_model_probing_level = 0  # probing alone took ~0.6s on 5k patterns
     st = s.Solve(m)
     if st not in (cp_model.OPTIMAL, cp_model.FEASIBLE):
-        return pb.PlaceResponse(status=s.StatusName(st), wall_s=time.monotonic() - t0)
+        return pb.PlaceResponse(status=s.StatusName(st), wall_s=time.monotonic() - t0, search_wall_s=s.wall_time)
     chosen = [pat for v, pat in zip(u, req.patterns) if s.BooleanValue(v)]
     return pb.PlaceResponse(
         assignments=[a for pat in chosen for a in pat.assignments],
         status=s.StatusName(st), wall_s=time.monotonic() - t0,
+        search_wall_s=s.wall_time,
         deterministic_time=s.deterministic_time,
         frag=sum(pat.frag for pat in chosen),
         placed_weight=sum(weight[a.pod] for pat in chosen for a in pat.assignments))
@@ -271,7 +272,7 @@ def solve_place(req: pb.PlaceRequest) -> pb.PlaceResponse:
     s1 = _params(req, 0.3 * budget)
     st1 = s1.Solve(p1.m)
     if st1 not in (cp_model.OPTIMAL, cp_model.FEASIBLE):
-        return pb.PlaceResponse(status=s1.StatusName(st1), wall_s=time.monotonic() - t0)
+        return pb.PlaceResponse(status=s1.StatusName(st1), wall_s=time.monotonic() - t0, search_wall_s=s1.wall_time)
     best_placed = int(s1.ObjectiveValue())
     phase1 = p1.extract(s1)
 
@@ -290,5 +291,6 @@ def solve_place(req: pb.PlaceRequest) -> pb.PlaceResponse:
         asg, status, frag = phase1, "FEASIBLE", float("nan")
     return pb.PlaceResponse(
         assignments=asg, status=status, wall_s=time.monotonic() - t0,
+        search_wall_s=s1.wall_time + s2.wall_time,
         deterministic_time=s1.deterministic_time + s2.deterministic_time,
         frag=frag, placed_weight=best_placed)
