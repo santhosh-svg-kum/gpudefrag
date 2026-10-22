@@ -6,7 +6,10 @@ package mip
 
 import (
 	"context"
+	"runtime"
 	"sort"
+	"sync"
+	"sync/atomic"
 	"time"
 
 	"google.golang.org/grpc"
@@ -39,12 +42,15 @@ type Stats struct {
 }
 
 type Placer struct {
-	Solver        Solver
-	Typical       []frag.TargetPod
-	K             int           // candidate nodes per pod
-	TimeLimit     time.Duration // solver budget per batch
-	Deterministic bool
-	Workers       int
+	Solver  Solver
+	Typical []frag.TargetPod
+	K       int // candidate nodes per pod
+	// PatternWorkers bounds the goroutines generating per-node patterns;
+	// 0 means min(GOMAXPROCS, 8), 1 is serial. Output does not depend on it.
+	PatternWorkers int
+	TimeLimit      time.Duration // solver budget per batch
+	Deterministic  bool
+	Workers        int
 	// Pattern (column) formulation, the default: per-node subsets of up to
 	// MaxPatternSize batch pods (default 3), at most MaxPatterns per node
 	// (default 2000). Direct=true sends the direct CP-SAT model instead.
@@ -291,7 +297,18 @@ func gangsWhole(c *sim.Cluster, b batch, sol []*choice) bool {
 	return true
 }
 
+// patterns generates every node's patterns on a bounded worker pool. Each
+// node is independent and only reads the cluster, and results are joined in
+// node order, so the output is identical to a serial run.
 func (pl *Placer) patterns(c *sim.Cluster, pods []model.Pod, nodes []int, cands []map[int]bool, hint []*choice) []*pb.Pattern {
+	w := pl.PatternWorkers
+	if w <= 0 {
+		w = min(runtime.GOMAXPROCS(0), 8)
+	}
+	return pl.patternsN(w, c, pods, nodes, cands, hint)
+}
+
+func (pl *Placer) patternsN(workers int, c *sim.Cluster, pods []model.Pod, nodes []int, cands []map[int]bool, hint []*choice) []*pb.Pattern {
 	size, limit := pl.MaxPatternSize, pl.MaxPatterns
 	if size <= 0 {
 		size = 3
@@ -299,14 +316,16 @@ func (pl *Placer) patterns(c *sim.Cluster, pods []model.Pod, nodes []int, cands 
 	if limit <= 0 {
 		limit = 2000
 	}
-	var out []*pb.Pattern
-	for _, n := range nodes {
+	per := make([][]*pb.Pattern, len(nodes))
+	one := func(k int) {
+		n := nodes[k]
 		var here []int
 		for i := range pods {
 			if cands[i][n] && len(here) < 64 {
 				here = append(here, i)
 			}
 		}
+		var out []*pb.Pattern
 		for _, p := range genPatterns(c, n, here, pods, pl.objective(), size, limit) {
 			out = append(out, toPB(p))
 		}
@@ -323,7 +342,32 @@ func (pl *Placer) patterns(c *sim.Cluster, pods []model.Pod, nodes []int, cands 
 		h.frag = frag.NodeScore(scratch.Nodes[0], pl.objective())
 		nd := c.Nodes[n]
 		h.opensIdle = nd.GpuNum() > 0 && nd.FullyFree() == nd.GpuNum() && usesGPU(h.gpus)
-		out = append(out, toPB(h))
+		per[k] = append(out, toPB(h))
+	}
+	if workers > len(nodes) {
+		workers = len(nodes)
+	}
+	if workers <= 1 {
+		for k := range nodes {
+			one(k)
+		}
+	} else {
+		var next atomic.Int64
+		var wg sync.WaitGroup
+		for ; workers > 0; workers-- {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				for k := int(next.Add(1)) - 1; k < len(nodes); k = int(next.Add(1)) - 1 {
+					one(k)
+				}
+			}()
+		}
+		wg.Wait()
+	}
+	var out []*pb.Pattern
+	for _, ps := range per {
+		out = append(out, ps...)
 	}
 	return out
 }
