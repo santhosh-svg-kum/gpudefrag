@@ -63,6 +63,8 @@ func runSuite1b(args []string) error {
 	parallel := fs.Int("parallel", 5, "concurrent runs")
 	solverDir := fs.String("solver-dir", "solver", "python solver project")
 	addr := fs.String("solver", "", "solver address (default: start one locally)")
+	restart := fs.Float64("restart", 60, "seconds a migrated pod spends restarting under +defrag variants")
+	restartSweep := fs.String("restart-sweep", "", "comma-separated restart times (e.g. 60,300,900): run each +defrag variant once per value (overrides -restart)")
 	fs.Parse(args)
 
 	allNodes, err := trace.LoadOpenbNodes(filepath.Join(*data, "openb", "openb_node_list_gpu_node.csv"))
@@ -121,7 +123,8 @@ func runSuite1b(args []string) error {
 				n := int(workload.ArrivalRate(base, capMilli, j.load, maxDur.Seconds()) * window)
 				arrivals := workload.Synthesize(rand.New(rand.NewSource(j.seed)), base, capMilli, j.load, n, maxDur.Seconds())
 				cfg := timed.Config{Nodes: nodes, Jobs: arrivals, Batch: *batch, MeasureFrom: warm.Seconds(), DrainLimit: 1}
-				name, defrag := strings.CutSuffix(j.variant, "+defrag")
+				vname, rst := splitRestart(j.variant, *restart)
+				name, defrag := strings.CutSuffix(vname, "+defrag")
 				var pl *mip.Placer
 				switch name {
 				case "gpudefrag":
@@ -137,7 +140,7 @@ func runSuite1b(args []string) error {
 				if defrag {
 					cfg.Defrag = &timed.DefragConfig{
 						Planner:  &mip.Defragmenter{Solver: client, MaxMoves: 4, TimeLimit: time.Second, Deterministic: true, Workers: cpWorkers},
-						Interval: 60, CheckpointInterval: 1800, Restart: 60, BenefitHorizon: 3600, Margin: 0.2, Seed: j.seed,
+						Interval: 60, CheckpointInterval: 1800, Restart: rst, BenefitHorizon: 3600, Margin: 0.2, Seed: j.seed,
 					}
 				}
 				r := timed.Run(cfg)
@@ -164,7 +167,10 @@ func runSuite1b(args []string) error {
 			}
 		}()
 	}
-	vs := strings.Split(*variants, ",")
+	vs, err := restartVariants(strings.Split(*variants, ","), *restartSweep)
+	if err != nil {
+		return err
+	}
 	var ls []float64
 	for _, l := range strings.Split(*loads, ",") {
 		v, err := strconv.ParseFloat(l, 64)
