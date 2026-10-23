@@ -110,6 +110,8 @@ func runSuite2(args []string) error {
 	parallel := fs.Int("parallel", 4, "concurrent runs")
 	solverDir := fs.String("solver-dir", "solver", "python solver project")
 	addr := fs.String("solver", "", "solver address (default: start one locally)")
+	restart := fs.Float64("restart", 60, "seconds a migrated pod spends restarting under +defrag variants")
+	restartSweep := fs.String("restart-sweep", "", "comma-separated restart times (e.g. 60,300,900): run each +defrag variant once per value (overrides -restart)")
 	fs.Parse(args)
 
 	all, st, err := trace.LoadHelios(filepath.Join(*data, "helios", "data", *cluster, "cluster_log.csv"))
@@ -177,7 +179,8 @@ func runSuite2(args []string) error {
 				}
 				cfg := timed.Config{Nodes: nodes, Jobs: arr, Batch: *batch, LocalGangMax: *domainSize,
 					MeasureFrom: warm / j.c, DrainLimit: 1}
-				name, defrag := strings.CutSuffix(j.variant, "+defrag")
+				vname, rst := splitRestart(j.variant, *restart)
+				name, defrag := strings.CutSuffix(vname, "+defrag")
 				var pl *mip.Placer
 				if name == "gpudefrag" {
 					pl = &mip.Placer{Solver: client, Typical: typical, K: 16, TimeLimit: *limit, Deterministic: true, Workers: cpWorkers, IdleWeight: *idle, ObjectiveTypical: objTypical}
@@ -192,7 +195,7 @@ func runSuite2(args []string) error {
 				if defrag {
 					cfg.Defrag = &timed.DefragConfig{
 						Planner:  &mip.Defragmenter{Solver: client, MaxMoves: 4, TimeLimit: time.Second, Deterministic: true, Workers: cpWorkers},
-						Interval: 60, CheckpointInterval: 1800, Restart: 60, BenefitHorizon: 3600, Margin: 0.2, Seed: int64(j.w),
+						Interval: 60, CheckpointInterval: 1800, Restart: rst, BenefitHorizon: 3600, Margin: 0.2, Seed: int64(j.w),
 					}
 				}
 				r := timed.Run(cfg)
@@ -212,7 +215,10 @@ func runSuite2(args []string) error {
 			}
 		}()
 	}
-	vs := strings.Split(*variants, ",")
+	vs, err := restartVariants(strings.Split(*variants, ","), *restartSweep)
+	if err != nil {
+		return err
+	}
 	var cs []float64
 	for _, x := range strings.Split(*compress, ",") {
 		v, err := strconv.ParseFloat(x, 64)
