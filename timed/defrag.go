@@ -20,9 +20,12 @@ type DefragConfig struct {
 	Interval           float64 // min seconds between defrag ticks
 	CheckpointInterval float64 // seconds of work between checkpoints
 	Restart            float64 // seconds a migrated pod spends restarting
-	BenefitHorizon     float64 // benefit = blocked milli-GPU x this many seconds
-	Margin             float64 // execute only if cost <= benefit / (1 + Margin)
-	Seed               int64
+	// Grace is the eviction grace period: victims keep their resources and the
+	// scheduler pauses for Grace seconds before the blocked pod binds (0 = instant).
+	Grace          float64
+	BenefitHorizon float64 // benefit = blocked milli-GPU x this many seconds
+	Margin         float64 // execute only if cost <= benefit / (1 + Margin)
+	Seed           int64
 }
 
 type DefragStats struct {
@@ -92,6 +95,37 @@ func (s *state) maybeDefrag() {
 		return
 	}
 
+	if d.Grace > 0 {
+		s.busy = true // no binds while victims terminate
+		s.eng.Push(now+d.Grace, sim.RankDefrag, func() {
+			s.busy = false
+			for _, m := range plan.Moves {
+				if !s.jobs[m.ID].running {
+					s.res.Defrag.Rejected["grace-aborted"]++
+					s.dirty = true
+					s.trigger()
+					return
+				}
+			}
+			s.executeDefrag(plan, blocked)
+			s.trigger()
+		})
+		return
+	}
+	s.executeDefrag(plan, blocked)
+}
+
+// executeDefrag migrates the plan's victims and binds the blocked pod, all at
+// the current time.
+func (s *state) executeDefrag(plan *mip.Plan, blocked *job) {
+	d := s.cfg.Defrag
+	now := s.eng.Now()
+	lost := map[int]float64{}
+	for _, m := range plan.Moves {
+		j := s.jobs[m.ID]
+		done := j.workDone + math.Max(0, now-j.runStart)
+		lost[j.id] = done - lastCheckpoint(done, j.ckptPhase, d.CheckpointInterval)
+	}
 	s.account()
 	for _, m := range plan.Moves {
 		j := s.jobs[m.ID]

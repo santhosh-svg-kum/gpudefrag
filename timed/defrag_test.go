@@ -92,3 +92,35 @@ func TestCheckpointMath(t *testing.T) {
 		}
 	}
 }
+
+func TestDefragGraceDelaysBlockedBind(t *testing.T) {
+	cfg, _ := textbook(1000)
+	cfg.Defrag.Grace = 30
+	r := Run(cfg)
+	if r.Defrag.Plans != 1 || r.Defrag.Migrations != 1 || r.Unplaced != 0 {
+		t.Fatalf("%+v unplaced=%d", r.Defrag, r.Unplaced)
+	}
+	if got := r.GpuPendingLatency[2]; got != 30 {
+		t.Fatalf("big job should wait out the grace period, waited %v", got)
+	}
+}
+
+func TestDefragGraceZeroIsUnchanged(t *testing.T) {
+	a, _ := textbook(1000)
+	b, _ := textbook(1000)
+	b.Defrag.Grace = 0
+	ra, rb := Run(a), Run(b)
+	if ra.Defrag.Plans != rb.Defrag.Plans || ra.Defrag.LostGpuSec != rb.Defrag.LostGpuSec || ra.GpuPendingLatency[2] != 0 || rb.GpuPendingLatency[2] != 0 {
+		t.Fatalf("%+v vs %+v", ra.Defrag, rb.Defrag)
+	}
+}
+
+func TestDefragGraceAbortsWhenVictimFinishes(t *testing.T) {
+	cfg, _ := textbook(1000)
+	cfg.Defrag.Grace = 30
+	cfg.Jobs[1].Duration = 20 // q1 (bound at the defrag instant) completes inside the grace window
+	r := Run(cfg)
+	if r.Defrag.Plans != 0 || r.Defrag.Rejected["grace-aborted"] != 1 {
+		t.Fatalf("%+v", r.Defrag)
+	}
+}
