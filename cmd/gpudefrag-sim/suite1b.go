@@ -64,6 +64,7 @@ func runSuite1b(args []string) error {
 	solverDir := fs.String("solver-dir", "solver", "python solver project")
 	addr := fs.String("solver", "", "solver address (default: start one locally)")
 	restart := fs.Float64("restart", 60, "seconds a migrated pod spends restarting under +defrag variants")
+	grace := fs.Float64("grace", 0, "eviction grace period in seconds: victims hold resources and the blocked pod binds this much later under +defrag variants")
 	restartSweep := fs.String("restart-sweep", "", "comma-separated restart times (e.g. 60,300,900): run each +defrag variant once per value (overrides -restart)")
 	fs.Parse(args)
 
@@ -140,7 +141,7 @@ func runSuite1b(args []string) error {
 				if defrag {
 					cfg.Defrag = &timed.DefragConfig{
 						Planner:  &mip.Defragmenter{Solver: client, MaxMoves: 4, TimeLimit: time.Second, Deterministic: true, Workers: cpWorkers},
-						Interval: 60, CheckpointInterval: 1800, Restart: rst, BenefitHorizon: 3600, Margin: 0.2, Seed: j.seed,
+						Interval: 60, CheckpointInterval: 1800, Restart: rst, Grace: *grace, BenefitHorizon: 3600, Margin: 0.2, Seed: j.seed,
 					}
 				}
 				r := timed.Run(cfg)
