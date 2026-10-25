@@ -65,7 +65,10 @@ type Placer struct {
 	// ObjectiveTypical, if set, is the typical-pod distribution the solver
 	// optimizes (e.g. GPU-weighted); the FGD hint always uses Typical.
 	ObjectiveTypical []frag.TargetPod
-	Stats            Stats
+	// WarmStartBest warm-starts from the better (by the batch objective) of
+	// the FGD and Binpack placements instead of FGD's alone. Off by default.
+	WarmStartBest bool
+	Stats         Stats
 }
 
 type choice struct {
@@ -143,20 +146,11 @@ func (pl *Placer) DecideRequests(c *sim.Cluster, reqs []Request) [][]*Choice {
 		}
 	}
 
-	// FGD (gang-aware) hint on a scratch copy.
-	scratch := sim.NewCluster(c.Nodes)
-	hint := make([]*choice, len(b.pods))
-	for r, req := range reqs {
-		if len(req.Pods) == 1 {
-			if n, g, ok := sched.Place(scratch, fgd, req.Pods[0], nil); ok {
-				hint[first[r]] = &choice{n, g}
-			}
-			continue
-		}
-		if nodes, gpus, ok := sched.PlaceGang(scratch, fgd, req.Pods, req.Local, nil); ok {
-			for k := range nodes {
-				hint[first[r]+k] = &choice{nodes[k], gpus[k]}
-			}
+	// FGD (gang-aware) hint, or the better of FGD and Binpack if WarmStartBest.
+	hint := pl.hintFor(c, reqs, first, fgd)
+	if pl.WarmStartBest {
+		if bp := pl.hintFor(c, reqs, first, sched.Binpack{}); better(c, b.pods, bp, hint, pl.objective()) {
+			hint = bp
 		}
 	}
 
@@ -182,6 +176,30 @@ func (pl *Placer) DecideRequests(c *sim.Cluster, reqs []Request) [][]*Choice {
 		}
 	}
 	return out
+}
+
+// hintFor places the requests in order on a scratch copy with pol.
+func (pl *Placer) hintFor(c *sim.Cluster, reqs []Request, first []int, pol sched.Policy) []*choice {
+	scratch := sim.NewCluster(c.Nodes)
+	n := 0
+	for _, req := range reqs {
+		n += len(req.Pods)
+	}
+	hint := make([]*choice, n)
+	for r, req := range reqs {
+		if len(req.Pods) == 1 {
+			if n, g, ok := sched.Place(scratch, pol, req.Pods[0], nil); ok {
+				hint[first[r]] = &choice{n, g}
+			}
+			continue
+		}
+		if nodes, gpus, ok := sched.PlaceGang(scratch, pol, req.Pods, req.Local, nil); ok {
+			for k := range nodes {
+				hint[first[r]+k] = &choice{nodes[k], gpus[k]}
+			}
+		}
+	}
+	return hint
 }
 
 func (pl *Placer) solve(c *sim.Cluster, b batch, hint []*choice, fgd sched.FGD) ([]*choice, string) {
