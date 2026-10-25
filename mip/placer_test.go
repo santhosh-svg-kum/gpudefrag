@@ -221,3 +221,28 @@ func TestStatsDirectModeHasNoPatternTime(t *testing.T) {
 		t.Fatalf("%+v", pl.Stats)
 	}
 }
+
+// Binpack prefers the already-used node, so on the trap it places both pods
+// where FGD strands one; with WarmStartBest the hint is Binpack's.
+func TestWarmStartBestPicksBinpackHint(t *testing.T) {
+	c, pods, typ := trap()
+	f := &fakeSolver{resp: &pb.PlaceResponse{Status: "FEASIBLE"}}
+	pl := placer(f, typ)
+	pl.WarmStartBest = true
+	placed := pl.PlaceBatch(c, pods)
+	if len(f.got.Hint) != 2 {
+		t.Fatalf("hint should be Binpack's two-pod placement, got %v", f.got.Hint)
+	}
+	if !placed[0] || !placed[1] || c.UsedGpuMilli() != 2000 {
+		t.Fatalf("placed=%v used=%d", placed, c.UsedGpuMilli())
+	}
+}
+
+func TestWarmStartBestOffKeepsFGDHint(t *testing.T) {
+	c, pods, typ := trap()
+	f := &fakeSolver{resp: &pb.PlaceResponse{Status: "FEASIBLE"}}
+	placer(f, typ).PlaceBatch(c, pods)
+	if len(f.got.Hint) != 1 {
+		t.Fatalf("default must stay FGD's hint, got %v", f.got.Hint)
+	}
+}

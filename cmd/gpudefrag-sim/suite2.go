@@ -107,6 +107,7 @@ func runSuite2(args []string) error {
 	limit := fs.Duration("time", 500*time.Millisecond, "gpudefrag solver budget per batch")
 	objW := fs.Float64("obj-gpu-weight", 1, "gpudefrag objective: GPU weight for typical classes (FGD gpuResWeight); 0 = FGD's count weighting")
 	idle := fs.Float64("idle-weight", -1, "gpudefrag penalty (milli-GPU) for opening an idle node; <0 lexicographic, 0 off")
+	warmBest := fs.Bool("warm-best", false, "gpudefrag warm-starts from the better of FGD and Binpack placements (default: FGD only)")
 	parallel := fs.Int("parallel", 4, "concurrent runs")
 	solverDir := fs.String("solver-dir", "solver", "python solver project")
 	addr := fs.String("solver", "", "solver address (default: start one locally)")
@@ -184,7 +185,7 @@ func runSuite2(args []string) error {
 				name, defrag := strings.CutSuffix(vname, "+defrag")
 				var pl *mip.Placer
 				if name == "gpudefrag" {
-					pl = &mip.Placer{Solver: client, Typical: typical, K: 16, TimeLimit: *limit, Deterministic: true, Workers: cpWorkers, IdleWeight: *idle, ObjectiveTypical: objTypical}
+					pl = &mip.Placer{Solver: client, Typical: typical, K: 16, TimeLimit: *limit, Deterministic: true, Workers: cpWorkers, IdleWeight: *idle, ObjectiveTypical: objTypical, WarmStartBest: *warmBest}
 					cfg.Decider = pl
 				} else {
 					pol, err := sched.New(name, typical)
