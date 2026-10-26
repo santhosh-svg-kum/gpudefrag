@@ -246,3 +246,25 @@ func TestWarmStartBestOffKeepsFGDHint(t *testing.T) {
 		t.Fatalf("default must stay FGD's hint, got %v", f.got.Hint)
 	}
 }
+
+// Opening idle node B (domain d1, 2 nodes) or D (domain d2, 3 nodes) ties on
+// fragmentation; only the gang term sees that opening B leaves 1+3 free
+// nodes (score 10) where opening D leaves 2+2 (score 8).
+func TestGangFreeBreaksFragTie(t *testing.T) {
+	mk := func(name, dom string) *model.NodeRes {
+		n := model.NewNode(name, 64000, 1<<20, 1, "")
+		n.Domain = dom
+		return n
+	}
+	c := sim.NewCluster([]*model.NodeRes{mk("B", "d1"), mk("B2", "d1"), mk("D", "d2"), mk("D2", "d2"), mk("D3", "d2")})
+	pods := []model.Pod{{Name: "p", Res: model.PodRes{MilliCPU: 1000, MemMiB: 1, GpuNum: 1, GpuMilli: 500}}}
+	typ := []frag.TargetPod{{Res: model.PodRes{MilliCPU: 1000, GpuNum: 1, GpuMilli: 300}, Pct: 1}}
+	openB := []*choice{{node: 0, gpus: []int{0}}}
+	openD := []*choice{{node: 2, gpus: []int{0}}}
+	if better(c, pods, openB, openD, typ, false) || better(c, pods, openD, openB, typ, false) {
+		t.Fatal("flag off: tie must stay a tie")
+	}
+	if !better(c, pods, openB, openD, typ, true) || better(c, pods, openD, openB, typ, true) {
+		t.Fatal("flag on: opening B should win")
+	}
+}

@@ -68,6 +68,10 @@ type Placer struct {
 	// WarmStartBest warm-starts from the better (by the batch objective) of
 	// the FGD and Binpack placements instead of FGD's alone. Off by default.
 	WarmStartBest bool
+	// GangFree breaks batch-objective ties (equal weight and fragmentation)
+	// in favor of the placement that leaves free whole nodes concentrated in
+	// fewer topology domains (see freeNodeScore). Off by default.
+	GangFree bool
 	Stats         Stats
 }
 
@@ -149,7 +153,7 @@ func (pl *Placer) DecideRequests(c *sim.Cluster, reqs []Request) [][]*Choice {
 	// FGD (gang-aware) hint, or the better of FGD and Binpack if WarmStartBest.
 	hint := pl.hintFor(c, reqs, first, fgd)
 	if pl.WarmStartBest {
-		if bp := pl.hintFor(c, reqs, first, sched.Binpack{}); better(c, b.pods, bp, hint, pl.objective()) {
+		if bp := pl.hintFor(c, reqs, first, sched.Binpack{}); better(c, b.pods, bp, hint, pl.objective(), pl.GangFree) {
 			hint = bp
 		}
 	}
@@ -159,7 +163,7 @@ func (pl *Placer) DecideRequests(c *sim.Cluster, reqs []Request) [][]*Choice {
 		pl.Stats.NoFit++
 	} else if reason != "" {
 		pl.Stats.Fallbacks[reason]++
-	} else if better(c, b.pods, sol, hint, pl.objective()) {
+	} else if better(c, b.pods, sol, hint, pl.objective(), pl.GangFree) {
 		best = sol
 		pl.Stats.Improved++
 	}
@@ -435,11 +439,48 @@ func validate(c *sim.Cluster, pods []model.Pod, cands []map[int]bool, asg []*pb.
 }
 
 // better reports whether a beats b: more placed weight, or equal weight and
-// strictly less fragmentation on the nodes either one touches.
-func better(c *sim.Cluster, pods []model.Pod, a, b []*choice, typical []frag.TargetPod) bool {
+// strictly less fragmentation on the nodes either one touches. With gangFree,
+// a tie on both is broken by freeNodeScore.
+func better(c *sim.Cluster, pods []model.Pod, a, b []*choice, typical []frag.TargetPod, gangFree bool) bool {
 	wa, fa := evaluate(c, pods, a, b, typical)
 	wb, fb := evaluate(c, pods, b, a, typical)
-	return wa > wb || (wa == wb && fa < fb-1e-6)
+	if wa != wb || fa < fb-1e-6 || fb < fa-1e-6 {
+		return wa > wb || (wa == wb && fa < fb-1e-6)
+	}
+	return gangFree && freeNodeScore(c, pods, a) > freeNodeScore(c, pods, b)
+}
+
+// freeNodeScore is the sum over topology domains of (free whole GPU nodes)^2
+// after applying the placement; the square rewards keeping free nodes
+// together, where a gang that must sit in one domain can use them.
+func freeNodeScore(c *sim.Cluster, pods []model.Pod, a []*choice) int64 {
+	scratch := sim.NewCluster(c.Nodes)
+	for i, ch := range a {
+		if ch != nil {
+			scratch.Bind(ch.node, pods[i].Res, ch.gpus)
+		}
+	}
+	free := map[string]int64{}
+	for _, n := range scratch.Nodes {
+		if n.GpuNum() == 0 {
+			continue
+		}
+		whole := true
+		for _, g := range n.GpuLeft {
+			if g != model.Milli {
+				whole = false
+				break
+			}
+		}
+		if whole {
+			free[n.Domain]++
+		}
+	}
+	var s int64
+	for _, k := range free {
+		s += k * k
+	}
+	return s
 }
 
 func evaluate(c *sim.Cluster, pods []model.Pod, a, other []*choice, typical []frag.TargetPod) (int64, float64) {
