@@ -16,7 +16,7 @@
 ## Week 2
 
 - [x] 1. Gang-aware objective term: count free whole nodes per topology domain in the batch objective (`mip.evaluate`), behind a `Placer` flag defaulting off. Unit tests on a cluster where two placements tie on fragmentation but differ in free whole nodes.
-- [ ] 2. Decomposition, part 1: a pure function that splits a batch into groups of pods with disjoint candidate-node sets (union-find over `cands`). Tests: disjoint, chained and gang-linked cases. No behavior change yet.
+- [x] 2. Decomposition, part 1: a pure function that splits a batch into groups of pods with disjoint candidate-node sets (union-find over `cands`). Tests: disjoint, chained and gang-linked cases. No behavior change yet.
 - [ ] 3. Decomposition, part 2: solve the groups from task 2 as separate solver requests concurrently, behind a flag defaulting off; merge answers and validate. Tests with a fake solver proving the merged result equals the single-request result.
 - [ ] 4. Solver process pool: `StartLocal` can start N solver processes and `Dial` round-robins requests across them (flag `-solver-procs`, default 1). Tests for the round-robin and shutdown.
 - [ ] 5. Pattern caching: memoize `genPatterns` per (node state, pod-resource multiset) within a batch so repeated pod shapes reuse results. Test identical output to uncached; benchmark ns/op in the PR body.
