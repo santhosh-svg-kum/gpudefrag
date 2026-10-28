@@ -72,7 +72,12 @@ type Placer struct {
 	// in favor of the placement that leaves free whole nodes concentrated in
 	// fewer topology domains (see freeNodeScore). Off by default.
 	GangFree bool
-	Stats         Stats
+	// Decompose solves groups of pods with disjoint candidate nodes (and no
+	// shared gang) as separate concurrent solver requests and merges the
+	// answers. Off by default.
+	Decompose bool
+	Stats     Stats
+	mu        sync.Mutex // guards Stats appends from concurrent group solves
 }
 
 type choice struct {
@@ -207,18 +212,20 @@ func (pl *Placer) hintFor(c *sim.Cluster, reqs []Request, first []int, pol sched
 }
 
 func (pl *Placer) solve(c *sim.Cluster, b batch, hint []*choice, fgd sched.FGD) ([]*choice, string) {
-	pods := b.pods
-	cands := make([]map[int]bool, len(pods))
-	touched := map[int]bool{}
-	req := &pb.PlaceRequest{
-		TimeLimitS:    pl.TimeLimit.Seconds(),
-		Deterministic: pl.Deterministic,
-		Workers:       int32(pl.Workers),
+	if pl.Decompose {
+		groups := independentGroups(pl.candidates(c, b, hint, fgd), b.gang)
+		if len(groups) > 1 {
+			return pl.solveGroups(c, b, hint, fgd, groups)
+		}
 	}
-	for _, tp := range pl.objective() {
-		req.Classes = append(req.Classes, &pb.TypicalClass{Cpu: tp.Res.MilliCPU, GpuMilli: tp.Res.GpuMilli, GpuNum: int32(tp.Res.GpuNum), Pct: tp.Pct})
-	}
-	for i, p := range pods {
+	return pl.solveOne(c, b, hint, fgd)
+}
+
+// candidates returns each pod's candidate nodes: the FGD top-K (every
+// feasible node for gang pods) plus the hint's node.
+func (pl *Placer) candidates(c *sim.Cluster, b batch, hint []*choice, fgd sched.FGD) []map[int]bool {
+	cands := make([]map[int]bool, len(b.pods))
+	for i, p := range b.pods {
 		cands[i] = map[int]bool{}
 		if b.gang[i] != 0 {
 			// Gang pods may need whole domains: offer every feasible node.
@@ -233,6 +240,65 @@ func (pl *Placer) solve(c *sim.Cluster, b batch, hint []*choice, fgd sched.FGD) 
 		if hint[i] != nil {
 			cands[i][hint[i].node] = true
 		}
+	}
+	return cands
+}
+
+// solveGroups solves each group as its own request, concurrently, and merges
+// the answers back into batch order. Any failing group fails the whole batch
+// (so the caller keeps the hint); groups with no candidate nodes stay unplaced.
+func (pl *Placer) solveGroups(c *sim.Cluster, b batch, hint []*choice, fgd sched.FGD, groups [][]int) ([]*choice, string) {
+	sols := make([][]*choice, len(groups))
+	reasons := make([]string, len(groups))
+	var wg sync.WaitGroup
+	for g, idx := range groups {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			sub := batch{local: b.local}
+			subHint := make([]*choice, len(idx))
+			for k, i := range idx {
+				sub.pods = append(sub.pods, b.pods[i])
+				sub.gang = append(sub.gang, b.gang[i])
+				subHint[k] = hint[i]
+			}
+			sols[g], reasons[g] = pl.solveOne(c, sub, subHint, fgd)
+		}()
+	}
+	wg.Wait()
+	out := make([]*choice, len(b.pods))
+	solved := false
+	for g, idx := range groups {
+		switch reasons[g] {
+		case "":
+			solved = true
+			for k, i := range idx {
+				out[i] = sols[g][k]
+			}
+		case "empty":
+		default:
+			return nil, reasons[g]
+		}
+	}
+	if !solved {
+		return nil, "empty"
+	}
+	return out, ""
+}
+
+func (pl *Placer) solveOne(c *sim.Cluster, b batch, hint []*choice, fgd sched.FGD) ([]*choice, string) {
+	pods := b.pods
+	cands := pl.candidates(c, b, hint, fgd)
+	touched := map[int]bool{}
+	req := &pb.PlaceRequest{
+		TimeLimitS:    pl.TimeLimit.Seconds(),
+		Deterministic: pl.Deterministic,
+		Workers:       int32(pl.Workers),
+	}
+	for _, tp := range pl.objective() {
+		req.Classes = append(req.Classes, &pb.TypicalClass{Cpu: tp.Res.MilliCPU, GpuMilli: tp.Res.GpuMilli, GpuNum: int32(tp.Res.GpuNum), Pct: tp.Pct})
+	}
+	for i, p := range pods {
 		pp := &pb.Pod{Id: int32(i), Cpu: p.Res.MilliCPU, Mem: p.Res.MemMiB, GpuNum: int32(p.Res.GpuNum),
 			GpuMilli: p.Res.GpuMilli, Weight: weight(p.Res), Gang: int32(b.gang[i]), DomainLocal: b.local[b.gang[i]]}
 		for n := range cands[i] {
@@ -265,7 +331,9 @@ func (pl *Placer) solve(c *sim.Cluster, b batch, hint []*choice, fgd sched.FGD) 
 		tp := time.Now()
 		req.Patterns = pl.patterns(c, pods, ids, cands, hint)
 		req.IdleWeight = pl.IdleWeight
+		pl.mu.Lock()
 		pl.Stats.PatternWall = append(pl.Stats.PatternWall, time.Since(tp))
+		pl.mu.Unlock()
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), pl.TimeLimit*3/2+2*time.Second)
@@ -273,13 +341,17 @@ func (pl *Placer) solve(c *sim.Cluster, b batch, hint []*choice, fgd sched.FGD) 
 	t0 := time.Now()
 	resp, err := pl.Solver.Place(ctx, req)
 	rpc := time.Since(t0)
+	pl.mu.Lock()
 	pl.Stats.SolveWall = append(pl.Stats.SolveWall, rpc)
 	pl.Stats.RPCWall = append(pl.Stats.RPCWall, rpc)
+	if err == nil {
+		pl.Stats.SolverWall = append(pl.Stats.SolverWall, time.Duration(resp.WallS*float64(time.Second)))
+		pl.Stats.SearchWall = append(pl.Stats.SearchWall, time.Duration(resp.SearchWallS*float64(time.Second)))
+	}
+	pl.mu.Unlock()
 	if err != nil {
 		return nil, "rpc"
 	}
-	pl.Stats.SolverWall = append(pl.Stats.SolverWall, time.Duration(resp.WallS*float64(time.Second)))
-	pl.Stats.SearchWall = append(pl.Stats.SearchWall, time.Duration(resp.SearchWallS*float64(time.Second)))
 	if resp.Status != "OPTIMAL" && resp.Status != "FEASIBLE" {
 		return nil, "status"
 	}
