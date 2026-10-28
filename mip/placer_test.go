@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"os/exec"
+	"reflect"
+	"sync"
 	"testing"
 	"time"
 
@@ -266,5 +268,64 @@ func TestGangFreeBreaksFragTie(t *testing.T) {
 	}
 	if !better(c, pods, openB, openD, typ, true) || better(c, pods, openD, openB, typ, true) {
 		t.Fatal("flag on: opening B should win")
+	}
+}
+
+// echoSolver answers every request with its own hint, so the merged answer of
+// split requests can be compared with the single-request one.
+type echoSolver struct {
+	mu    sync.Mutex
+	calls int
+}
+
+func (e *echoSolver) Place(_ context.Context, r *pb.PlaceRequest, _ ...grpc.CallOption) (*pb.PlaceResponse, error) {
+	e.mu.Lock()
+	e.calls++
+	e.mu.Unlock()
+	return &pb.PlaceResponse{Status: "OPTIMAL", Assignments: r.Hint}, nil
+}
+
+func disjointCluster() (*sim.Cluster, []model.Pod, []frag.TargetPod) {
+	var nodes []*model.NodeRes
+	for _, n := range []string{"A", "B", "C"} {
+		nodes = append(nodes, model.NewNode(n, 64000, 1<<20, 1, ""))
+	}
+	pod := func(name string, milli int64) model.Pod {
+		return model.Pod{Name: name, Res: model.PodRes{MilliCPU: 1000, MemMiB: 1, GpuNum: 1, GpuMilli: milli}}
+	}
+	typ := []frag.TargetPod{{Res: model.PodRes{MilliCPU: 1000, GpuNum: 1, GpuMilli: 300}, Pct: 1}}
+	nodes[0].GpuLeft[0] = 500
+	nodes[2].GpuLeft[0] = 300
+	return sim.NewCluster(nodes), []model.Pod{pod("p0", 500), pod("p1", 1000), pod("p2", 300)}, typ
+}
+
+func TestDecomposeMatchesSingleRequest(t *testing.T) {
+	run := func(decompose bool) ([]*Choice, *echoSolver) {
+		c, pods, typ := disjointCluster()
+		e := &echoSolver{}
+		pl := placer(e, typ)
+		pl.K = 1 // one candidate per pod keeps the pods' groups disjoint
+		pl.Decompose = decompose
+		return pl.Decide(c, pods), e
+	}
+	want, single := run(false)
+	got, split := run(true)
+	if single.calls != 1 || split.calls < 2 {
+		t.Fatalf("calls: single=%d split=%d", single.calls, split.calls)
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("merged %v != single %v", got, want)
+	}
+}
+
+func TestDecomposeFailedGroupFallsBackToHint(t *testing.T) {
+	c, pods, typ := disjointCluster()
+	f := &fakeSolver{err: errors.New("down")}
+	pl := placer(f, typ)
+	pl.K = 1
+	pl.Decompose = true
+	placed := pl.PlaceBatch(c, pods)
+	if !placed[0] || !placed[1] || !placed[2] || pl.Stats.Fallbacks["rpc"] != 1 {
+		t.Fatalf("placed=%v stats=%+v", placed, pl.Stats)
 	}
 }
