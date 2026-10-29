@@ -87,6 +87,7 @@ func runSuite1a(args []string) error {
 	seedHi := fs.Int64("seed-to", 51, "last seed")
 	parallel := fs.Int("parallel", 5, "concurrent runs")
 	solverDir := fs.String("solver-dir", "solver", "python solver project")
+	solverProcs := fs.Int("solver-procs", 1, "solver processes to start locally (requests are round-robined)")
 	addr := fs.String("solver", "", "solver address (default: start one locally)")
 	fs.Parse(args)
 
@@ -116,7 +117,7 @@ func runSuite1a(args []string) error {
 	var client *mip.Client
 	if needSolver {
 		if *addr == "" {
-			a, stop, err := mip.StartLocal(context.Background(), *solverDir)
+			a, stop, err := mip.StartLocalN(context.Background(), *solverDir, *solverProcs)
 			if err != nil {
 				return err
 			}

@@ -110,6 +110,7 @@ func runSuite2(args []string) error {
 	warmBest := fs.Bool("warm-best", false, "gpudefrag warm-starts from the better of FGD and Binpack placements (default: FGD only)")
 	parallel := fs.Int("parallel", 4, "concurrent runs")
 	solverDir := fs.String("solver-dir", "solver", "python solver project")
+	solverProcs := fs.Int("solver-procs", 1, "solver processes to start locally (requests are round-robined)")
 	addr := fs.String("solver", "", "solver address (default: start one locally)")
 	restart := fs.Float64("restart", 60, "seconds a migrated pod spends restarting under +defrag variants")
 	grace := fs.Float64("grace", 0, "eviction grace period in seconds: victims hold resources and the blocked pod binds this much later under +defrag variants")
@@ -142,7 +143,7 @@ func runSuite2(args []string) error {
 	var client *mip.Client
 	if strings.Contains(*variants, "gpudefrag") || strings.Contains(*variants, "defrag") {
 		if *addr == "" {
-			a, stop, err := mip.StartLocal(context.Background(), *solverDir)
+			a, stop, err := mip.StartLocalN(context.Background(), *solverDir, *solverProcs)
 			if err != nil {
 				return err
 			}
