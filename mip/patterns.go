@@ -1,6 +1,12 @@
 package mip
 
 import (
+	"fmt"
+	"sort"
+	"strings"
+	"sync"
+	"sync/atomic"
+
 	"github.com/santhosh-svg-kum/gpudefrag/frag"
 	"github.com/santhosh-svg-kum/gpudefrag/model"
 	"github.com/santhosh-svg-kum/gpudefrag/sched"
@@ -107,6 +113,69 @@ func deviceOptions(n *model.NodeRes, p model.PodRes) [][]int {
 			seen[left] = true
 			out = append(out, []int{i})
 		}
+	}
+	return out
+}
+
+// patternCache memoizes genPatterns within one batch. Two nodes with the same
+// resource state and the same sequence of candidate pod shapes yield the same
+// patterns up to node and pod indices, which are remapped on a hit.
+type patternCache struct {
+	m    sync.Map // string -> []pattern, with pods as positions in cand
+	hits atomic.Int64
+}
+
+func newPatternCache() *patternCache { return &patternCache{} }
+
+func (pc *patternCache) key(n *model.NodeRes, cand []int, pods []model.Pod, maxSize, maxPatterns int) string {
+	var b strings.Builder
+	fmt.Fprintf(&b, "%d,%d|%d,%d|%s|%v|", maxSize, maxPatterns, n.CPULeft, n.MemLeft, n.GpuType, n.GpuLeft)
+	tags := make([]string, 0, len(n.Affinity))
+	for k, v := range n.Affinity {
+		tags = append(tags, fmt.Sprintf("%s=%d", k, v))
+	}
+	sort.Strings(tags)
+	fmt.Fprintf(&b, "%v|", tags)
+	for _, i := range cand {
+		fmt.Fprintf(&b, "%v;", pods[i].Res)
+	}
+	return b.String()
+}
+
+// gen returns exactly what genPatterns would.
+func (pc *patternCache) gen(c *sim.Cluster, node int, cand []int, pods []model.Pod, typical []frag.TargetPod, maxSize, maxPatterns int) []pattern {
+	k := pc.key(c.Nodes[node], cand, pods, maxSize, maxPatterns)
+	pos := make(map[int]int, len(cand))
+	for p, i := range cand {
+		pos[i] = p
+	}
+	if v, ok := pc.m.Load(k); ok {
+		pc.hits.Add(1)
+		return remapPatterns(v.([]pattern), node, cand, nil)
+	}
+	out := genPatterns(c, node, cand, pods, typical, maxSize, maxPatterns)
+	pc.m.Store(k, remapPatterns(out, node, nil, pos))
+	return out
+}
+
+// remapPatterns copies ps onto node. With pos set it rewrites batch indices to
+// positions in cand; with cand set it maps positions back to batch indices.
+func remapPatterns(ps []pattern, node int, cand []int, pos map[int]int) []pattern {
+	out := make([]pattern, len(ps))
+	for i, p := range ps {
+		q := p
+		q.node = node
+		if p.pods != nil {
+			q.pods = make([]int, len(p.pods))
+			for j, x := range p.pods {
+				if pos != nil {
+					q.pods[j] = pos[x]
+				} else {
+					q.pods[j] = cand[x]
+				}
+			}
+		}
+		out[i] = q
 	}
 	return out
 }

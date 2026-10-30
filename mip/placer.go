@@ -411,6 +411,7 @@ func (pl *Placer) patternsN(workers int, c *sim.Cluster, pods []model.Pod, nodes
 		limit = 2000
 	}
 	per := make([][]*pb.Pattern, len(nodes))
+	cache := newPatternCache()
 	one := func(k int) {
 		n := nodes[k]
 		var here []int
@@ -420,7 +421,7 @@ func (pl *Placer) patternsN(workers int, c *sim.Cluster, pods []model.Pod, nodes
 			}
 		}
 		var out []*pb.Pattern
-		for _, p := range genPatterns(c, n, here, pods, pl.objective(), size, limit) {
+		for _, p := range cache.gen(c, n, here, pods, pl.objective(), size, limit) {
 			out = append(out, toPB(p))
 		}
 		// The hint's own pattern for this node keeps FGD's answer reachable.
