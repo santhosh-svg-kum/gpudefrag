@@ -166,3 +166,43 @@ func TestPatternsParallelMatchesSerial(t *testing.T) {
 		}
 	}
 }
+
+func TestPatternCacheMatchesUncached(t *testing.T) {
+	c, pods, typ, _, cands := manyNodeFixture(12) // 4 distinct node states, repeated
+	// Drop some candidates on some nodes so the same state sees different pod subsets.
+	for n := 0; n < 12; n += 5 {
+		delete(cands[0], n)
+		delete(cands[3], n)
+	}
+	cache := newPatternCache()
+	for n := range c.Nodes {
+		var here []int
+		for i := range pods {
+			if cands[i][n] {
+				here = append(here, i)
+			}
+		}
+		want := genPatterns(c, n, here, pods, typ, 3, 500)
+		for rep := 0; rep < 2; rep++ {
+			got := cache.gen(c, n, here, pods, typ, 3, 500)
+			if !reflect.DeepEqual(got, want) {
+				t.Fatalf("node %d rep %d: cached output differs from uncached", n, rep)
+			}
+		}
+	}
+	if cache.hits.Load() == 0 {
+		t.Fatal("expected cache hits across identical node states")
+	}
+}
+
+func BenchmarkPatternsCache(b *testing.B) {
+	c, pods, typ, _, cands := manyNodeFixture(16)
+	nodes := make([]int, 16)
+	for i := range nodes {
+		nodes[i] = i
+	}
+	pl := &Placer{Typical: typ}
+	for i := 0; i < b.N; i++ {
+		pl.patternsN(1, c, pods, nodes, cands, nil)
+	}
+}
