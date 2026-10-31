@@ -76,8 +76,16 @@ type Placer struct {
 	// shared gang) as separate concurrent solver requests and merges the
 	// answers. Off by default.
 	Decompose bool
-	Stats     Stats
-	mu        sync.Mutex // guards Stats appends from concurrent group solves
+	// CrossBatchCache keeps the pattern cache across batches, so a node whose
+	// state and candidate pod shapes repeat in a later batch reuses its
+	// patterns. Off by default. It assumes the objective does not change
+	// between batches. The cache is dropped between batches once it holds more
+	// than CacheMaxEntries (default 20000) entries.
+	CrossBatchCache bool
+	CacheMaxEntries int
+	cache           *patternCache
+	Stats           Stats
+	mu              sync.Mutex // guards Stats appends from concurrent group solves
 }
 
 type choice struct {
@@ -411,7 +419,7 @@ func (pl *Placer) patternsN(workers int, c *sim.Cluster, pods []model.Pod, nodes
 		limit = 2000
 	}
 	per := make([][]*pb.Pattern, len(nodes))
-	cache := newPatternCache()
+	cache := pl.batchCache()
 	one := func(k int) {
 		n := nodes[k]
 		var here []int
@@ -465,6 +473,24 @@ func (pl *Placer) patternsN(workers int, c *sim.Cluster, pods []model.Pod, nodes
 		out = append(out, ps...)
 	}
 	return out
+}
+
+// batchCache returns the pattern cache for one batch: fresh, or the shared
+// cross-batch one (reset once it outgrows CacheMaxEntries).
+func (pl *Placer) batchCache() *patternCache {
+	if !pl.CrossBatchCache {
+		return newPatternCache()
+	}
+	limit := int64(pl.CacheMaxEntries)
+	if limit <= 0 {
+		limit = 20000
+	}
+	pl.mu.Lock()
+	defer pl.mu.Unlock()
+	if pl.cache == nil || pl.cache.size.Load() > limit {
+		pl.cache = newPatternCache()
+	}
+	return pl.cache
 }
 
 func (pl *Placer) objective() []frag.TargetPod {
