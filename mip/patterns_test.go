@@ -206,3 +206,40 @@ func BenchmarkPatternsCache(b *testing.B) {
 		pl.patternsN(1, c, pods, nodes, cands, nil)
 	}
 }
+
+func TestCrossBatchPatternCache(t *testing.T) {
+	c, pods, typ, _, cands := manyNodeFixture(12)
+	nodes := make([]int, 12)
+	for i := range nodes {
+		nodes[i] = i
+	}
+	off := &Placer{Typical: typ}
+	on := &Placer{Typical: typ, CrossBatchCache: true}
+	want := off.patternsN(1, c, pods, nodes, cands, nil)
+	first := on.patternsN(1, c, pods, nodes, cands, nil)
+	h1 := on.cache.hits.Load()
+	second := on.patternsN(1, c, pods, nodes, cands, nil)
+	if !reflect.DeepEqual(first, want) || !reflect.DeepEqual(second, want) {
+		t.Fatal("cached output differs from uncached")
+	}
+	if got := on.cache.hits.Load(); got < h1+int64(len(nodes)) {
+		t.Fatalf("second batch should hit for every node: hits %d -> %d", h1, got)
+	}
+	if off.cache != nil {
+		t.Fatal("cache must stay nil when the flag is off")
+	}
+}
+
+func TestPatternCacheBounded(t *testing.T) {
+	c, pods, typ, _, cands := manyNodeFixture(12)
+	nodes := make([]int, 12)
+	for i := range nodes {
+		nodes[i] = i
+	}
+	pl := &Placer{Typical: typ, CrossBatchCache: true, CacheMaxEntries: 1}
+	pl.patternsN(1, c, pods, nodes, cands, nil)
+	pl.patternsN(1, c, pods, nodes, cands, nil)
+	if n := pl.cache.size.Load(); n > 1+4 { // bounded: reset between batches, not unbounded growth
+		t.Fatalf("cache grew to %d entries", n)
+	}
+}

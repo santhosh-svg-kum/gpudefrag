@@ -123,6 +123,7 @@ func deviceOptions(n *model.NodeRes, p model.PodRes) [][]int {
 type patternCache struct {
 	m    sync.Map // string -> []pattern, with pods as positions in cand
 	hits atomic.Int64
+	size atomic.Int64 // entries stored
 }
 
 func newPatternCache() *patternCache { return &patternCache{} }
@@ -154,7 +155,9 @@ func (pc *patternCache) gen(c *sim.Cluster, node int, cand []int, pods []model.P
 		return remapPatterns(v.([]pattern), node, cand, nil)
 	}
 	out := genPatterns(c, node, cand, pods, typical, maxSize, maxPatterns)
-	pc.m.Store(k, remapPatterns(out, node, nil, pos))
+	if _, loaded := pc.m.LoadOrStore(k, remapPatterns(out, node, nil, pos)); !loaded {
+		pc.size.Add(1)
+	}
 	return out
 }
 
