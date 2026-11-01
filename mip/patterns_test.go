@@ -7,6 +7,7 @@ import (
 
 	"github.com/santhosh-svg-kum/gpudefrag/frag"
 	"github.com/santhosh-svg-kum/gpudefrag/model"
+	pb "github.com/santhosh-svg-kum/gpudefrag/proto/gpudefrag/v1"
 	"github.com/santhosh-svg-kum/gpudefrag/sim"
 )
 
@@ -241,5 +242,61 @@ func TestPatternCacheBounded(t *testing.T) {
 	pl.patternsN(1, c, pods, nodes, cands, nil)
 	if n := pl.cache.size.Load(); n > 1+4 { // bounded: reset between batches, not unbounded growth
 		t.Fatalf("cache grew to %d entries", n)
+	}
+}
+
+// runBatches decides two consecutive batches, binding the first, and returns
+// both decisions plus the placer.
+func runBatches(t *testing.T, pipeline bool) ([][][]*Choice, *Placer) {
+	t.Helper()
+	c, pods, typ, _, _ := manyNodeFixture(12)
+	mk := func(ps []model.Pod) []Request {
+		var rs []Request
+		for _, p := range ps {
+			rs = append(rs, Request{Pods: []model.Pod{p}})
+		}
+		return rs
+	}
+	h := len(pods) / 2
+	b1, b2 := mk(pods[:h]), mk(pods[h:])
+	pl := placer(&fakeSolver{resp: &pb.PlaceResponse{Status: "FEASIBLE"}}, typ)
+	pl.CrossBatchCache, pl.Pipeline = true, pipeline
+	pl.NextBatch = func() []Request { return b2 }
+	var out [][][]*Choice
+	d1 := pl.DecideRequests(c, b1)
+	out = append(out, d1)
+	for r, ds := range d1 {
+		for k, ch := range ds {
+			if ch != nil {
+				c.Bind(ch.Node, b1[r].Pods[k].Res, ch.GPUs)
+			}
+		}
+	}
+	pl.NextBatch = func() []Request { return nil }
+	out = append(out, pl.DecideRequests(c, b2))
+	return out, pl
+}
+
+func TestPipelineDecisionsIdenticalAndWarmsCache(t *testing.T) {
+	want, off := runBatches(t, false)
+	got, on := runBatches(t, true)
+	if !reflect.DeepEqual(got, want) {
+		t.Fatal("pipelined decisions differ from non-pipelined")
+	}
+	// The second batch's patterns were prefetched, so it hits more.
+	if on.cache.hits.Load() <= off.cache.hits.Load() {
+		t.Fatalf("prefetch should add cache hits: %d vs %d", on.cache.hits.Load(), off.cache.hits.Load())
+	}
+}
+
+func TestPipelineNeedsCrossBatchCache(t *testing.T) {
+	c, pods, typ, _, _ := manyNodeFixture(4)
+	pl := placer(&fakeSolver{resp: &pb.PlaceResponse{Status: "FEASIBLE"}}, typ)
+	pl.Pipeline = true
+	called := false
+	pl.NextBatch = func() []Request { called = true; return nil }
+	pl.PlaceBatch(c, pods[:1])
+	if called {
+		t.Fatal("NextBatch must not be consulted without CrossBatchCache")
 	}
 }

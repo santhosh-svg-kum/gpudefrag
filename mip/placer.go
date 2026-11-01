@@ -76,6 +76,15 @@ type Placer struct {
 	// shared gang) as separate concurrent solver requests and merges the
 	// answers. Off by default.
 	Decompose bool
+	// Pipeline, with CrossBatchCache and NextBatch set, generates the next
+	// batch's patterns (into the cross-batch cache) while the solver works on
+	// the current one, against the cluster after the FGD hint. It only warms
+	// the cache, so decisions are identical to a non-pipelined run. Off by
+	// default.
+	Pipeline bool
+	// NextBatch returns the requests expected in the next DecideRequests call
+	// (nil if unknown). Only called when Pipeline is on.
+	NextBatch func() []Request
 	// CrossBatchCache keeps the pattern cache across batches, so a node whose
 	// state and candidate pod shapes repeat in a later batch reuses its
 	// patterns. Off by default. It assumes the objective does not change
@@ -148,20 +157,7 @@ func (pl *Placer) DecideRequests(c *sim.Cluster, reqs []Request) [][]*Choice {
 		pl.Stats.Fallbacks = map[string]int{}
 	}
 	fgd := sched.NewFGD(pl.Typical)
-	b := batch{local: map[int]bool{}}
-	var first []int // index of each request's first pod
-	for r, req := range reqs {
-		first = append(first, len(b.pods))
-		g := 0
-		if len(req.Pods) > 1 {
-			g = r + 1
-			b.local[g] = req.Local
-		}
-		for _, p := range req.Pods {
-			b.pods = append(b.pods, p)
-			b.gang = append(b.gang, g)
-		}
-	}
+	b, first := flatten(reqs)
 
 	// FGD (gang-aware) hint, or the better of FGD and Binpack if WarmStartBest.
 	hint := pl.hintFor(c, reqs, first, fgd)
@@ -172,7 +168,10 @@ func (pl *Placer) DecideRequests(c *sim.Cluster, reqs []Request) [][]*Choice {
 	}
 
 	best := hint
-	if sol, reason := pl.solve(c, b, hint, fgd); reason == "empty" {
+	stop := pl.prefetchNext(c, b, hint, fgd)
+	sol, reason := pl.solve(c, b, hint, fgd)
+	stop()
+	if reason == "empty" {
 		pl.Stats.NoFit++
 	} else if reason != "" {
 		pl.Stats.Fallbacks[reason]++
@@ -650,4 +649,62 @@ func fromI32(v []int32) []int {
 		out[i] = int(x)
 	}
 	return out
+}
+
+// flatten turns requests into a batch; first[r] is request r's first pod index.
+func flatten(reqs []Request) (batch, []int) {
+	b := batch{local: map[int]bool{}}
+	var first []int
+	for r, req := range reqs {
+		first = append(first, len(b.pods))
+		g := 0
+		if len(req.Pods) > 1 {
+			g = r + 1
+			b.local[g] = req.Local
+		}
+		for _, p := range req.Pods {
+			b.pods = append(b.pods, p)
+			b.gang = append(b.gang, g)
+		}
+	}
+	return b, first
+}
+
+// prefetchNext speculatively fills the pattern cache for the next batch on a
+// scratch cluster with hint applied, and returns a func that waits for it. The
+// cache is a pure memo, so this never changes a decision.
+func (pl *Placer) prefetchNext(c *sim.Cluster, cur batch, hint []*choice, fgd sched.FGD) func() {
+	if !pl.Pipeline || !pl.CrossBatchCache || pl.Direct || pl.NextBatch == nil {
+		return func() {}
+	}
+	next := pl.NextBatch()
+	if len(next) == 0 {
+		return func() {}
+	}
+	scratch := sim.NewCluster(c.Nodes)
+	for i, ch := range hint {
+		if ch != nil {
+			scratch.Bind(ch.node, cur.pods[i].Res, ch.gpus)
+		}
+	}
+	nb, _ := flatten(next)
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		nh := make([]*choice, len(nb.pods))
+		cands := pl.candidates(scratch, nb, nh, fgd)
+		touched := map[int]bool{}
+		for _, m := range cands {
+			for n := range m {
+				touched[n] = true
+			}
+		}
+		ids := make([]int, 0, len(touched))
+		for n := range touched {
+			ids = append(ids, n)
+		}
+		sort.Ints(ids)
+		pl.patterns(scratch, nb.pods, ids, cands, nh)
+	}()
+	return func() { <-done }
 }
