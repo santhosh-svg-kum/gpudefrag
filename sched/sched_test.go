@@ -144,3 +144,32 @@ func TestNew(t *testing.T) {
 		t.Fatal("unknown policy")
 	}
 }
+
+// GpuPacking scores the devices it would use (ascending milli-left, stable),
+// but binds with BestFitGPUs. For share pods these must be the same device,
+// otherwise the score describes a placement that never happens.
+func TestGpuPackingScoredDeviceMatchesBoundDevice(t *testing.T) {
+	rng := rand.New(rand.NewSource(7))
+	vals := []int64{0, 100, 250, 400, 600, 999, 1000}
+	for it := 0; it < 2000; it++ {
+		left := make([]int64, 1+rng.Intn(8))
+		for i := range left {
+			left[i] = vals[rng.Intn(len(vals))]
+		}
+		n := node("A", 64000, left...)
+		p := model.PodRes{MilliCPU: 1000, GpuNum: 1, GpuMilli: 50 + rng.Int63n(950)}
+		var scored = -1
+		for _, i := range n.SortedGpuIdx(true) {
+			if p.GpuMilli <= n.GpuLeft[i] {
+				scored = i
+				break
+			}
+		}
+		if scored == -1 {
+			continue
+		}
+		if got := (GpuPacking{}).SelectGPUs(n, p, nil); len(got) != 1 || got[0] != scored {
+			t.Fatalf("left=%v pod=%d: scored dev %d, bound %v", left, p.GpuMilli, scored, got)
+		}
+	}
+}

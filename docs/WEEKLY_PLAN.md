@@ -22,4 +22,14 @@
 - [x] 5. Pattern caching: memoize `genPatterns` per (node state, pod-resource multiset) within a batch so repeated pod shapes reuse results. Test identical output to uncached; benchmark ns/op in the PR body.
 - [x] 6a. Cross-batch pattern cache: `Placer.CrossBatchCache` (default off, bounded by `CacheMaxEntries`) keeps the pattern cache across batches. Tests for identical output, cross-batch hits and the bound.
 - [x] 6b. Pipeline pattern generation with the previous batch's solve: while the solver runs, speculatively generate (into the cross-batch cache) patterns for the next batch against the cluster state after the hint is applied, behind a flag defaulting off. Test that decisions are identical to the non-pipelined run.
-- [ ] 7. Investigate the ~0.6 pp GpuPacking/GpuClustering gap: add a small `docs/design` note with a reproducible diff of scoring tie-breaks between the two policies and a unit test for any discrepancy found. Then write week 3's 7 tasks.
+- [x] 7. Investigate the ~0.6 pp GpuPacking/GpuClustering gap: `docs/design/notes/2026-11-02-packing-clustering-gap.md` records what is ruled out (score/bind device mismatch, pinned by a test) and what is unchecked. Week 3 tasks written below.
+
+## Week 3
+
+- [ ] 1. Score normalization experiment: add an opt-in `-normalize-baselines` flag that min-max normalizes GpuPacking/GpuClustering scores (default off); report calibration deltas in the PR body without changing published numbers. Tests for the normalized ordering.
+- [ ] 2. GpuClustering truncation audit: unit tests that pin `used` and the four affinity tiers for hand-computed nodes, so any later change to integer arithmetic is deliberate.
+- [ ] 3. Calibration report: print per-seed max delta per policy in `make calib` output (currently only the worst), with a test on the formatting.
+- [ ] 4. First-divergence tool: `cmd/gpudefrag-sim -trace-placements FILE` writes (pod, node) per placement as CSV for one seed and policy; test that output is deterministic.
+- [ ] 5. Gang-aware objective: expose the free-whole-nodes weight as a `-gang-weight` flag and add it to the suite 2 report header. Tests for flag wiring.
+- [ ] 6. Solver budget sensitivity: record the fraction of batches that hit the time limit in `mip.Stats` and show it in the suite reports. Tests.
+- [ ] 7. Warm-start comparison: in the suite 1a report, add the share of batches where the solver beat its hint, split by hint source (FGD vs Binpack-or-FGD). Tests.
