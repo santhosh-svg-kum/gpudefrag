@@ -26,7 +26,7 @@
 
 ## Week 3
 
-- [ ] 1. Score normalization experiment: add an opt-in `-normalize-baselines` flag that min-max normalizes GpuPacking/GpuClustering scores (default off); report calibration deltas in the PR body without changing published numbers. Tests for the normalized ordering.
+- [x] 1. Score normalization experiment: add an opt-in `-normalize-baselines` flag that min-max normalizes GpuPacking/GpuClustering scores (default off); report calibration deltas in the PR body without changing published numbers. Tests for the normalized ordering.
 - [ ] 2. GpuClustering truncation audit: unit tests that pin `used` and the four affinity tiers for hand-computed nodes, so any later change to integer arithmetic is deliberate.
 - [ ] 3. Calibration report: print per-seed max delta per policy in `make calib` output (currently only the worst), with a test on the formatting.
 - [ ] 4. First-divergence tool: `cmd/gpudefrag-sim -trace-placements FILE` writes (pod, node) per placement as CSV for one seed and policy; test that output is deterministic.

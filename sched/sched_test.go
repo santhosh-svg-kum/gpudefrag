@@ -173,3 +173,57 @@ func TestGpuPackingScoredDeviceMatchesBoundDevice(t *testing.T) {
 		}
 	}
 }
+
+func TestNormalizedMinMaxScores(t *testing.T) {
+	// Idle node, half-used node: raw GpuPacking scores differ by a few points;
+	// normalized they span the full [MinScore, MaxScore] range.
+	c := sim.NewCluster([]*model.NodeRes{node("a", 100000, 1000, 1000), node("b", 100000, 500, 1000)})
+	p := model.PodRes{MilliCPU: 1000, GpuNum: 1, GpuMilli: 500}
+	rng := rand.New(rand.NewSource(1))
+	idx := []int{0, 1}
+	raw := GpuPacking{}.Score(c, idx, p, rng)
+	if raw[0] == raw[1] {
+		t.Fatalf("test setup: raw scores tie: %v", raw)
+	}
+	got := Normalized(GpuPacking{}).Score(c, idx, p, rng)
+	hi, lo := 0, 1
+	if raw[1] > raw[0] {
+		hi, lo = 1, 0
+	}
+	if got[hi] != MaxScore || got[lo] != MinScore {
+		t.Fatalf("normalized = %v, raw = %v", got, raw)
+	}
+	// Ordering is preserved.
+	if (raw[0] > raw[1]) != (got[0] > got[1]) {
+		t.Fatalf("ordering changed")
+	}
+	if Normalized(GpuPacking{}).Name() != "GpuPacking" {
+		t.Fatal("name changed")
+	}
+}
+
+func TestNormalizedAllTied(t *testing.T) {
+	c := sim.NewCluster([]*model.NodeRes{node("a", 100000, 1000), node("b", 100000, 1000)})
+	got := Normalized(GpuClustering{}).Score(c, []int{0, 1}, model.PodRes{GpuNum: 1, GpuMilli: 500}, rand.New(rand.NewSource(1)))
+	if got[0] != MinScore || got[1] != MinScore {
+		t.Fatalf("got %v", got)
+	}
+}
+
+func TestNewNormalizedOnlyWrapsPackingAndClustering(t *testing.T) {
+	for _, name := range Names {
+		pol, err := NewNormalized(name, nil, true)
+		if err != nil {
+			t.Fatal(err)
+		}
+		_, wrapped := pol.(normalized)
+		want := name == "GpuPacking" || name == "GpuClustering"
+		if wrapped != want {
+			t.Errorf("%s: wrapped=%v want %v", name, wrapped, want)
+		}
+		pol, _ = NewNormalized(name, nil, false)
+		if _, w := pol.(normalized); w {
+			t.Errorf("%s wrapped with normalize=false", name)
+		}
+	}
+}
