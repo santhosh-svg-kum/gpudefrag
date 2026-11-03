@@ -27,6 +27,7 @@ func runCalib(args []string) error {
 	seedHi := fs.Int64("seed-to", 51, "last seed")
 	tol := fs.Float64("tol", 1.0, "gate tolerance in percentage points")
 	workers := fs.Int("workers", runtime.NumCPU(), "parallel runs")
+	normBase := fs.Bool("normalize-baselines", false, "experiment: min-max normalize GpuPacking/GpuClustering scores (default off = published behavior)")
 	fs.Parse(args)
 
 	nodes, err := trace.LoadOpenbNodes(filepath.Join(*data, "openb", "openb_node_list_gpu_node.csv"))
@@ -68,7 +69,7 @@ func runCalib(args []string) error {
 			defer wg.Done()
 			for j := range jobs {
 				t0 := time.Now()
-				s, err := calib.Run(calib.RunConfig{Nodes: nodes, Pods: pods, Policy: j.pol, Seed: j.seed, Ratio: 1.3})
+				s, err := calib.Run(calib.RunConfig{Nodes: nodes, Pods: pods, Policy: j.pol, Seed: j.seed, Ratio: 1.3, NormalizeBaselines: *normBase})
 				mu.Lock()
 				if err != nil {
 					errs = append(errs, err)

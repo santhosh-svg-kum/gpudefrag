@@ -128,3 +128,27 @@ func normalize(scores []int64) {
 		}
 	}
 }
+
+// normalized wraps a policy so its scores are min-max normalized across the
+// feasible nodes, as the kube-scheduler would with a NormalizeScore extension.
+type normalized struct{ Policy }
+
+func (n normalized) Score(c *sim.Cluster, idx []int, p model.PodRes, rng *rand.Rand) []int64 {
+	out := n.Policy.Score(c, idx, p, rng)
+	normalize(out)
+	return out
+}
+
+// Normalized returns pol with min-max normalized scores.
+func Normalized(pol Policy) Policy { return normalized{pol} }
+
+// NewNormalized is New, optionally normalizing the GpuPacking and
+// GpuClustering scores (an experiment for the calibration gap; off keeps the
+// published behavior). Other policies are never wrapped.
+func NewNormalized(name string, typical []frag.TargetPod, normalizeBaselines bool) (Policy, error) {
+	pol, err := New(name, typical)
+	if err == nil && normalizeBaselines && (name == "GpuPacking" || name == "GpuClustering") {
+		pol = Normalized(pol)
+	}
+	return pol, err
+}

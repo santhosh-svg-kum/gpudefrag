@@ -32,6 +32,9 @@ type RunConfig struct {
 	// Placer, if set, places Batch consecutive arrivals at a time (gpudefrag).
 	Placer BatchPlacer
 	Batch  int
+	// NormalizeBaselines min-max normalizes GpuPacking/GpuClustering scores
+	// (experiment; default off keeps the published behavior).
+	NormalizeBaselines bool
 }
 
 // BatchPlacer places a batch of pods in one decision.
@@ -63,7 +66,7 @@ func RunDetailed(cfg RunConfig) (Result, error) {
 	placer := cfg.Placer
 	batch := cfg.Batch
 	if placer == nil {
-		pol, err := sched.New(cfg.Policy, workload.TypicalPods(cfg.Pods))
+		pol, err := sched.NewNormalized(cfg.Policy, workload.TypicalPods(cfg.Pods), cfg.NormalizeBaselines)
 		if err != nil {
 			return res, err
 		}
