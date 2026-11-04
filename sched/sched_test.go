@@ -227,3 +227,60 @@ func TestNewNormalizedOnlyWrapsPackingAndClustering(t *testing.T) {
 		}
 	}
 }
+
+// TestGpuClusteringScoreArithmetic pins GpuClustering's integer arithmetic
+// (used = 25*(8000-left)/8000 truncates, then one of four affinity tiers is
+// added) with hand-computed values, so any later change is deliberate.
+func TestGpuClusteringScoreArithmetic(t *testing.T) {
+	share := model.PodRes{GpuNum: 1, GpuMilli: 500} // tag "share-gpu"
+	mk := func(aff map[string]int, left ...int64) *model.NodeRes {
+		n := node("n", 64000, left...)
+		for k, v := range aff {
+			n.Affinity[k] = v
+		}
+		return n
+	}
+	full := func(k int) []int64 { // k idle GPUs of 1000
+		l := make([]int64, k)
+		for i := range l {
+			l[i] = 1000
+		}
+		return l
+	}
+	cases := []struct {
+		name string
+		n    *model.NodeRes
+		want int64
+	}{
+		// used = 25*(8000-8000)/8000 = 0; no tags -> +25
+		{"idle node, empty tier", mk(nil, full(8)...), 25},
+		// 7999 left: 25*1/8000 = 0.003 truncates to 0
+		{"truncates to zero", mk(nil, append(full(7), 999)...), 25},
+		// 7000 left: 25*1000/8000 = 3.125 -> 3
+		{"truncates 3.125", mk(nil, full(7)...), 28},
+		// 4000 left: 25*4000/8000 = 12.5 -> 12
+		{"truncates 12.5", mk(nil, 1000, 1000, 1000, 1000, 0, 0, 0, 0), 37},
+		// 0 left: used = 25; no tags -> 50
+		{"full node, empty tier", mk(nil, make([]int64, 8)...), 50},
+		// tag present and only tag: used 0 + 75
+		{"only matching tag", mk(map[string]int{"share-gpu": 2}, full(8)...), 75},
+		// tag plus another tag: used 0 + 50
+		{"matching and other tags", mk(map[string]int{"share-gpu": 1, "1-gpu": 1}, full(8)...), 50},
+		// only a different tag: used 0 + 0
+		{"only other tag", mk(map[string]int{"1-gpu": 3}, full(8)...), 0},
+		// 7000 left (used 3), only matching tag: 3 + 75
+		{"used plus top tier", mk(map[string]int{"share-gpu": 1}, full(7)...), 78},
+	}
+	for _, tc := range cases {
+		c := sim.NewCluster([]*model.NodeRes{tc.n})
+		got := GpuClustering{}.Score(c, []int{0}, share, rand.New(rand.NewSource(1)))
+		if got[0] != tc.want {
+			t.Errorf("%s: got %d want %d", tc.name, got[0], tc.want)
+		}
+	}
+	// Non-GPU pods always score MinScore.
+	c := sim.NewCluster([]*model.NodeRes{mk(nil, full(8)...)})
+	if got := (GpuClustering{}).Score(c, []int{0}, model.PodRes{MilliCPU: 1000}, nil); got[0] != MinScore {
+		t.Errorf("non-GPU pod: got %d", got[0])
+	}
+}
