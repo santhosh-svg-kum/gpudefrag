@@ -126,3 +126,24 @@ func TestRunIsDeterministicAndIsolated(t *testing.T) {
 
 func itoa(i int) string     { return strconv.Itoa(i) }
 func ftoa(f float64) string { return strconv.FormatFloat(f, 'f', -1, 64) }
+
+func TestGateSeedMaxDiff(t *testing.T) {
+	seeds := []int64{42, 43}
+	ref := map[string]map[int64]Curve{"FGD": {42: flat(95), 43: flat(95)}}
+	o42 := flat(95.5)
+	o42[100] = 96.25 // largest delta for seed 42
+	nan := flat(94)
+	nan[50] = math.NaN() // NaN points are ignored in the per-seed figure
+	ours := map[string]map[int64]Curve{"FGD": {42: o42, 43: nan}}
+	g := Gate(ours, ref, []string{"FGD"}, seeds, GatePoints, 1.0)
+	got := g.Policies[0].SeedMaxDiff
+	want := []SeedDiff{{42, 1.25}, {43, 1}}
+	if len(got) != 2 || got[0] != want[0] || got[1] != want[1] {
+		t.Fatalf("got %+v want %+v", got, want)
+	}
+	// a missing seed is omitted (the gate already fails on it)
+	g = Gate(map[string]map[int64]Curve{"FGD": {42: o42}}, ref, []string{"FGD"}, seeds, GatePoints, 1.0)
+	if g.Pass || len(g.Policies[0].SeedMaxDiff) != 1 {
+		t.Fatalf("missing seed: %+v", g)
+	}
+}

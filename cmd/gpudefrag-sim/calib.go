@@ -116,6 +116,7 @@ func runCalib(args []string) error {
 		}
 		fmt.Printf("%-14s %-44s %-44s %6.2f %2d/%-2d %s\n", p.Policy, fmtFloats(p.Ours), fmtFloats(p.Ref), p.MaxAbsDiff, p.ExactSeeds, len(seeds), status)
 	}
+	fmt.Print(fmtSeedMaxDiffs(g))
 	if !g.Pass {
 		return fmt.Errorf("calibration gate FAILED (tolerance %.1f pp)", *tol)
 	}
@@ -157,4 +158,18 @@ func fmtInts(v []int) string {
 		s[i] = strconv.Itoa(x)
 	}
 	return strings.Join(s, ",")
+}
+
+// fmtSeedMaxDiffs renders the per-seed max |ours-ref| (pp) for each policy.
+func fmtSeedMaxDiffs(g calib.GateResult) string {
+	var b strings.Builder
+	b.WriteString("per-seed max |ours-ref| (pp):\n")
+	for _, p := range g.Policies {
+		parts := make([]string, len(p.SeedMaxDiff))
+		for i, d := range p.SeedMaxDiff {
+			parts[i] = fmt.Sprintf("%d=%.2f", d.Seed, d.MaxAbsDiff)
+		}
+		fmt.Fprintf(&b, "  %-14s %s\n", p.Policy, strings.Join(parts, " "))
+	}
+	return b.String()
 }
