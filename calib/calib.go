@@ -201,8 +201,17 @@ type PolicyGate struct {
 	Ref        []float64 `json:"ref"`
 	MaxAbsDiff float64   `json:"max_abs_diff"`
 	ExactSeeds int       `json:"exact_seeds"` // seeds whose curve matches ref within 0.05 at every point
-	Pass       bool      `json:"pass"`
-	Reason     string    `json:"reason,omitempty"`
+	// SeedMaxDiff is, per seed with both curves present, the largest absolute
+	// difference over the gate points. Informational only: the gate decision
+	// uses the seed-mean MaxAbsDiff.
+	SeedMaxDiff []SeedDiff `json:"seed_max_diff,omitempty"`
+	Pass        bool       `json:"pass"`
+	Reason      string     `json:"reason,omitempty"`
+}
+
+type SeedDiff struct {
+	Seed       int64   `json:"seed"`
+	MaxAbsDiff float64 `json:"max_abs_diff"`
 }
 
 type GateResult struct {
@@ -252,11 +261,16 @@ func Gate(ours, ref map[string]map[int64]Curve, policies []string, seeds []int64
 				continue
 			}
 			exact := true
+			var sd float64
 			for _, k := range points {
 				if !(math.Abs(o[k]-r[k]) <= 0.05) {
 					exact = false
 				}
+				if d := math.Abs(o[k] - r[k]); !math.IsNaN(d) {
+					sd = max(sd, d)
+				}
 			}
+			pg.SeedMaxDiff = append(pg.SeedMaxDiff, SeedDiff{Seed: s, MaxAbsDiff: round2(sd)})
 			if exact {
 				pg.ExactSeeds++
 			}
