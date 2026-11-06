@@ -5,6 +5,7 @@ package calib
 import (
 	"encoding/csv"
 	"fmt"
+	"io"
 	"math"
 	"math/rand"
 	"os"
@@ -35,6 +36,10 @@ type RunConfig struct {
 	// NormalizeBaselines min-max normalizes GpuPacking/GpuClustering scores
 	// (experiment; default off keeps the published behavior).
 	NormalizeBaselines bool
+	// Trace, if set, receives one CSV row (pod,node,gpus) per baseline
+	// placement attempt; node is empty when the pod did not place. Ignored
+	// when Placer is set.
+	Trace io.Writer
 }
 
 // BatchPlacer places a batch of pods in one decision.
@@ -70,7 +75,10 @@ func RunDetailed(cfg RunConfig) (Result, error) {
 		if err != nil {
 			return res, err
 		}
-		placer = policyPlacer{pol, rng}
+		placer = policyPlacer{pol: pol, rng: rng, trace: cfg.Trace, nodes: c.Nodes}
+		if cfg.Trace != nil {
+			fmt.Fprintln(cfg.Trace, "pod,node,gpus")
+		}
 		batch = 1
 	}
 	batch = max(batch, 1)
@@ -93,14 +101,27 @@ func RunDetailed(cfg RunConfig) (Result, error) {
 
 // policyPlacer adapts a one-pod-at-a-time baseline to BatchPlacer.
 type policyPlacer struct {
-	pol sched.Policy
-	rng *rand.Rand
+	pol   sched.Policy
+	rng   *rand.Rand
+	trace io.Writer
+	nodes []*model.NodeRes
 }
 
 func (p policyPlacer) PlaceBatch(c *sim.Cluster, pods []model.Pod) []bool {
 	out := make([]bool, len(pods))
 	for i, pod := range pods {
-		_, _, out[i] = sched.Place(c, p.pol, pod, p.rng)
+		node, gpus, ok := sched.Place(c, p.pol, pod, p.rng)
+		out[i] = ok
+		if p.trace != nil {
+			name, g := "", make([]string, len(gpus))
+			if ok {
+				name = p.nodes[node].Name
+			}
+			for k, x := range gpus {
+				g[k] = strconv.Itoa(x)
+			}
+			fmt.Fprintf(p.trace, "%s,%s,%s\n", pod.Name, name, strings.Join(g, " "))
+		}
 	}
 	return out
 }

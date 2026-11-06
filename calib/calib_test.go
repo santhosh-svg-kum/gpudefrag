@@ -147,3 +147,39 @@ func TestGateSeedMaxDiff(t *testing.T) {
 		t.Fatalf("missing seed: %+v", g)
 	}
 }
+
+func TestTracePlacementsDeterministic(t *testing.T) {
+	nodes := []*model.NodeRes{model.NewNode("a", 64000, 1<<20, 2, ""), model.NewNode("b", 64000, 1<<20, 2, "")}
+	var pods []model.Pod
+	for i := 0; i < 10; i++ {
+		pods = append(pods, model.Pod{Name: "p" + itoa(i), Res: model.PodRes{MilliCPU: 1000, MemMiB: 1, GpuNum: 1, GpuMilli: int64(100 + 80*i)}})
+	}
+	run := func() (string, []Sample) {
+		var b strings.Builder
+		cfg := RunConfig{Nodes: nodes, Pods: pods, Policy: "FGD", Seed: 42, Ratio: 1.3, Trace: &b}
+		s, err := Run(cfg)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return b.String(), s
+	}
+	a, sa := run()
+	b, _ := run()
+	if a != b {
+		t.Fatalf("trace not deterministic:\n%s\nvs\n%s", a, b)
+	}
+	plain, _ := Run(RunConfig{Nodes: nodes, Pods: pods, Policy: "FGD", Seed: 42, Ratio: 1.3})
+	if len(plain) != len(sa) {
+		t.Fatal("tracing changed the run")
+	}
+	lines := strings.Split(strings.TrimSpace(a), "\n")
+	if lines[0] != "pod,node,gpus" || len(lines) < 2 {
+		t.Fatalf("bad header/rows: %q", a)
+	}
+	for _, l := range lines[1:] {
+		f := strings.Split(l, ",")
+		if len(f) != 3 || (f[1] != "a" && f[1] != "b" && f[1] != "") {
+			t.Fatalf("bad row %q", l)
+		}
+	}
+}

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"encoding/json"
 	"errors"
 	"flag"
@@ -28,8 +29,12 @@ func runCalib(args []string) error {
 	tol := fs.Float64("tol", 1.0, "gate tolerance in percentage points")
 	workers := fs.Int("workers", runtime.NumCPU(), "parallel runs")
 	normBase := fs.Bool("normalize-baselines", false, "experiment: min-max normalize GpuPacking/GpuClustering scores (default off = published behavior)")
+	tracePath := fs.String("trace-placements", "", "write (pod,node,gpus) per placement as CSV; needs exactly one policy and one seed")
 	fs.Parse(args)
 
+	if *tracePath != "" && (len(strings.Split(*policies, ",")) != 1 || *seedLo != *seedHi) {
+		return errors.New("-trace-placements needs exactly one policy (-policies) and one seed (-seed-from == -seed-to)")
+	}
 	nodes, err := trace.LoadOpenbNodes(filepath.Join(*data, "openb", "openb_node_list_gpu_node.csv"))
 	if err != nil {
 		return err
@@ -69,7 +74,27 @@ func runCalib(args []string) error {
 			defer wg.Done()
 			for j := range jobs {
 				t0 := time.Now()
-				s, err := calib.Run(calib.RunConfig{Nodes: nodes, Pods: pods, Policy: j.pol, Seed: j.seed, Ratio: 1.3, NormalizeBaselines: *normBase})
+				cfg := calib.RunConfig{Nodes: nodes, Pods: pods, Policy: j.pol, Seed: j.seed, Ratio: 1.3, NormalizeBaselines: *normBase}
+				var tw *bufio.Writer
+				var tf *os.File
+				if *tracePath != "" {
+					var ferr error
+					if tf, ferr = os.Create(*tracePath); ferr != nil {
+						mu.Lock()
+						errs = append(errs, ferr)
+						mu.Unlock()
+						continue
+					}
+					tw = bufio.NewWriter(tf)
+					cfg.Trace = tw
+				}
+				s, err := calib.Run(cfg)
+				if tw != nil {
+					if ferr := tw.Flush(); err == nil {
+						err = ferr
+					}
+					tf.Close()
+				}
 				mu.Lock()
 				if err != nil {
 					errs = append(errs, err)
