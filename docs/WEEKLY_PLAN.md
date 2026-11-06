@@ -29,7 +29,7 @@
 - [x] 1. Score normalization experiment: add an opt-in `-normalize-baselines` flag that min-max normalizes GpuPacking/GpuClustering scores (default off); report calibration deltas in the PR body without changing published numbers. Tests for the normalized ordering.
 - [x] 2. GpuClustering truncation audit: unit tests that pin `used` and the four affinity tiers for hand-computed nodes, so any later change to integer arithmetic is deliberate.
 - [x] 3. Calibration report: print per-seed max delta per policy in `make calib` output (currently only the worst), with a test on the formatting.
-- [ ] 4. First-divergence tool: `cmd/gpudefrag-sim -trace-placements FILE` writes (pod, node) per placement as CSV for one seed and policy; test that output is deterministic.
+- [x] 4. First-divergence tool: `cmd/gpudefrag-sim calib -trace-placements FILE` writes (pod, node) per placement as CSV for one seed and policy; test that output is deterministic.
 - [ ] 5. Gang-aware objective: expose the free-whole-nodes weight as a `-gang-weight` flag and add it to the suite 2 report header. Tests for flag wiring.
 - [ ] 6. Solver budget sensitivity: record the fraction of batches that hit the time limit in `mip.Stats` and show it in the suite reports. Tests.
 - [ ] 7. Warm-start comparison: in the suite 1a report, add the share of batches where the solver beat its hint, split by hint source (FGD vs Binpack-or-FGD). Tests.
