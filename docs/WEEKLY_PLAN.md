@@ -30,6 +30,7 @@
 - [x] 2. GpuClustering truncation audit: unit tests that pin `used` and the four affinity tiers for hand-computed nodes, so any later change to integer arithmetic is deliberate.
 - [x] 3. Calibration report: print per-seed max delta per policy in `make calib` output (currently only the worst), with a test on the formatting.
 - [x] 4. First-divergence tool: `cmd/gpudefrag-sim calib -trace-placements FILE` writes (pod, node) per placement as CSV for one seed and policy; test that output is deterministic.
-- [ ] 5. Gang-aware objective: expose the free-whole-nodes weight as a `-gang-weight` flag and add it to the suite 2 report header. Tests for flag wiring.
+- [x] 5. Gang-free option in suite 2: `GangFree` is a bool tie-breaker (no weight exists), so expose it as `-gang-free` (default off) and note it in the suite 2 report header when on. Tests for the header note.
+- [ ] 5b. Turn the gang-free tie-breaker into a weighted objective term (`GangWeight` milli-GPU per free-whole-node-domain unit) in `mip.evaluate`, default 0 = current behavior, and expose `-gang-weight`. Tests on a cluster where the weight flips a non-tied choice.
 - [ ] 6. Solver budget sensitivity: record the fraction of batches that hit the time limit in `mip.Stats` and show it in the suite reports. Tests.
 - [ ] 7. Warm-start comparison: in the suite 1a report, add the share of batches where the solver beat its hint, split by hint source (FGD vs Binpack-or-FGD). Tests.
