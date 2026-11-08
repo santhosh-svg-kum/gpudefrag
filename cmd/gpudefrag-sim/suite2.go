@@ -108,6 +108,7 @@ func runSuite2(args []string) error {
 	objW := fs.Float64("obj-gpu-weight", 1, "gpudefrag objective: GPU weight for typical classes (FGD gpuResWeight); 0 = FGD's count weighting")
 	idle := fs.Float64("idle-weight", -1, "gpudefrag penalty (milli-GPU) for opening an idle node; <0 lexicographic, 0 off")
 	warmBest := fs.Bool("warm-best", false, "gpudefrag warm-starts from the better of FGD and Binpack placements (default: FGD only)")
+	gangWeight := fs.Float64("gang-weight", 0, "milli-GPU of fragmentation traded per unit of free-whole-node-per-domain score when comparing candidate placements (0 = off)")
 	gangFree := fs.Bool("gang-free", false, "gpudefrag breaks batch-objective ties toward placements that keep free whole nodes concentrated per topology domain (default off)")
 	parallel := fs.Int("parallel", 4, "concurrent runs")
 	solverDir := fs.String("solver-dir", "solver", "python solver project")
@@ -187,7 +188,7 @@ func runSuite2(args []string) error {
 				name, defrag := strings.CutSuffix(vname, "+defrag")
 				var pl *mip.Placer
 				if name == "gpudefrag" {
-					pl = &mip.Placer{Solver: client, Typical: typical, K: 16, TimeLimit: *limit, Deterministic: true, Workers: cpWorkers, IdleWeight: *idle, ObjectiveTypical: objTypical, WarmStartBest: *warmBest, GangFree: *gangFree}
+					pl = &mip.Placer{Solver: client, Typical: typical, K: 16, TimeLimit: *limit, Deterministic: true, Workers: cpWorkers, IdleWeight: *idle, ObjectiveTypical: objTypical, WarmStartBest: *warmBest, GangFree: *gangFree, GangWeight: *gangWeight}
 					cfg.Decider = pl
 				} else {
 					pol, err := sched.New(name, typical)
