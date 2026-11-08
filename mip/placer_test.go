@@ -263,10 +263,10 @@ func TestGangFreeBreaksFragTie(t *testing.T) {
 	typ := []frag.TargetPod{{Res: model.PodRes{MilliCPU: 1000, GpuNum: 1, GpuMilli: 300}, Pct: 1}}
 	openB := []*choice{{node: 0, gpus: []int{0}}}
 	openD := []*choice{{node: 2, gpus: []int{0}}}
-	if better(c, pods, openB, openD, typ, false) || better(c, pods, openD, openB, typ, false) {
+	if better(c, pods, openB, openD, typ, false, 0) || better(c, pods, openD, openB, typ, false, 0) {
 		t.Fatal("flag off: tie must stay a tie")
 	}
-	if !better(c, pods, openB, openD, typ, true) || better(c, pods, openD, openB, typ, true) {
+	if !better(c, pods, openB, openD, typ, true, 0) || better(c, pods, openD, openB, typ, true, 0) {
 		t.Fatal("flag on: opening B should win")
 	}
 }
@@ -327,5 +327,37 @@ func TestDecomposeFailedGroupFallsBackToHint(t *testing.T) {
 	placed := pl.PlaceBatch(c, pods)
 	if !placed[0] || !placed[1] || !placed[2] || pl.Stats.Fallbacks["rpc"] != 1 {
 		t.Fatalf("placed=%v stats=%+v", placed, pl.Stats)
+	}
+}
+
+// B is idle (d1 has 3 nodes), D already has 600 GPU-milli left (d2 has 2
+// nodes). Placing 500 on B leaves 500 (no fragment for a 300 target); on D it
+// leaves a 100 fragment but keeps all of d1's three nodes free (free-node
+// score 10 vs 5). Weight 0 follows fragmentation; a large weight flips to D.
+func TestGangWeightFlipsNonTiedChoice(t *testing.T) {
+	mk := func(name, dom string) *model.NodeRes {
+		n := model.NewNode(name, 64000, 1<<20, 1, "")
+		n.Domain = dom
+		return n
+	}
+	c := sim.NewCluster([]*model.NodeRes{mk("B", "d1"), mk("B2", "d1"), mk("B3", "d1"), mk("D", "d2"), mk("D2", "d2")})
+	c.Nodes[3].GpuLeft[0] = 600
+	pods := []model.Pod{{Name: "p", Res: model.PodRes{MilliCPU: 1000, MemMiB: 1, GpuNum: 1, GpuMilli: 500}}}
+	typ := []frag.TargetPod{{Res: model.PodRes{MilliCPU: 1000, GpuNum: 1, GpuMilli: 300}, Pct: 1}}
+	openB := []*choice{{node: 0, gpus: []int{0}}}
+	useD := []*choice{{node: 3, gpus: []int{0}}}
+	_, fb := evaluate(c, pods, openB, useD, typ)
+	_, fd := evaluate(c, pods, useD, openB, typ)
+	if !(fb < fd-1e-6) {
+		t.Fatalf("setup: B must win on fragmentation, got %v vs %v", fb, fd)
+	}
+	if !better(c, pods, openB, useD, typ, false, 0) || better(c, pods, useD, openB, typ, false, 0) {
+		t.Fatal("weight 0 must follow fragmentation")
+	}
+	if !better(c, pods, openB, useD, typ, false, 1e-9) {
+		t.Fatal("tiny weight must not change the choice")
+	}
+	if better(c, pods, openB, useD, typ, false, 1e9) || !better(c, pods, useD, openB, typ, false, 1e9) {
+		t.Fatal("large weight should pick D")
 	}
 }

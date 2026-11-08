@@ -72,6 +72,13 @@ type Placer struct {
 	// in favor of the placement that leaves free whole nodes concentrated in
 	// fewer topology domains (see freeNodeScore). Off by default.
 	GangFree bool
+	// GangWeight (milli-GPU of fragmentation per unit of freeNodeScore) turns
+	// the free-whole-node term into a weighted part of the comparison of the
+	// FGD/Binpack/solver placements: cost = fragmentation - GangWeight *
+	// freeNodeScore, lower wins at equal placed weight. 0 (default) keeps the
+	// current behavior. It only affects which candidate placement is kept,
+	// not the solver's own objective.
+	GangWeight float64
 	// Decompose solves groups of pods with disjoint candidate nodes (and no
 	// shared gang) as separate concurrent solver requests and merges the
 	// answers. Off by default.
@@ -162,7 +169,7 @@ func (pl *Placer) DecideRequests(c *sim.Cluster, reqs []Request) [][]*Choice {
 	// FGD (gang-aware) hint, or the better of FGD and Binpack if WarmStartBest.
 	hint := pl.hintFor(c, reqs, first, fgd)
 	if pl.WarmStartBest {
-		if bp := pl.hintFor(c, reqs, first, sched.Binpack{}); better(c, b.pods, bp, hint, pl.objective(), pl.GangFree) {
+		if bp := pl.hintFor(c, reqs, first, sched.Binpack{}); better(c, b.pods, bp, hint, pl.objective(), pl.GangFree, pl.GangWeight) {
 			hint = bp
 		}
 	}
@@ -175,7 +182,7 @@ func (pl *Placer) DecideRequests(c *sim.Cluster, reqs []Request) [][]*Choice {
 		pl.Stats.NoFit++
 	} else if reason != "" {
 		pl.Stats.Fallbacks[reason]++
-	} else if better(c, b.pods, sol, hint, pl.objective(), pl.GangFree) {
+	} else if better(c, b.pods, sol, hint, pl.objective(), pl.GangFree, pl.GangWeight) {
 		best = sol
 		pl.Stats.Improved++
 	}
@@ -538,10 +545,18 @@ func validate(c *sim.Cluster, pods []model.Pod, cands []map[int]bool, asg []*pb.
 
 // better reports whether a beats b: more placed weight, or equal weight and
 // strictly less fragmentation on the nodes either one touches. With gangFree,
-// a tie on both is broken by freeNodeScore.
-func better(c *sim.Cluster, pods []model.Pod, a, b []*choice, typical []frag.TargetPod, gangFree bool) bool {
+// a tie on both is broken by freeNodeScore. With gangWeight > 0, equal weight
+// is decided by fragmentation - gangWeight*freeNodeScore instead.
+func better(c *sim.Cluster, pods []model.Pod, a, b []*choice, typical []frag.TargetPod, gangFree bool, gangWeight float64) bool {
 	wa, fa := evaluate(c, pods, a, b, typical)
 	wb, fb := evaluate(c, pods, b, a, typical)
+	if gangWeight > 0 && wa == wb {
+		ca := fa - gangWeight*float64(freeNodeScore(c, pods, a))
+		cb := fb - gangWeight*float64(freeNodeScore(c, pods, b))
+		if ca < cb-1e-6 || cb < ca-1e-6 {
+			return ca < cb
+		}
+	}
 	if wa != wb || fa < fb-1e-6 || fb < fa-1e-6 {
 		return wa > wb || (wa == wb && fa < fb-1e-6)
 	}
