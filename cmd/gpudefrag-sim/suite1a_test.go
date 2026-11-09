@@ -66,3 +66,21 @@ func TestStageTimesAndBreakdownSection(t *testing.T) {
 		t.Fatal("section must be empty without stage data")
 	}
 }
+
+func TestBudgetSection(t *testing.T) {
+	vs := []variant{{Name: "FGD"}, {Name: "gpudefrag:b=16:t=500ms"}}
+	res := map[string][]runSummary{
+		"FGD":                    {{Seed: 42}},
+		"gpudefrag:b=16:t=500ms": {{Seed: 42, Solved: 100, BudgetHit: 25}, {Seed: 43, Solved: 100, BudgetHit: 75}},
+	}
+	rep := budgetSection(vs, res)
+	if !strings.Contains(rep, "| gpudefrag:b=16:t=500ms | 100 / 200 | 50.0% |") {
+		t.Fatalf("bad budget section:\n%s", rep)
+	}
+	if strings.Contains(rep, "| FGD |") {
+		t.Fatalf("FGD has no solver:\n%s", rep)
+	}
+	if budgetSection(vs[:1], res) != "" {
+		t.Fatal("section must be empty without solved batches")
+	}
+}
