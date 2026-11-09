@@ -361,3 +361,21 @@ func TestGangWeightFlipsNonTiedChoice(t *testing.T) {
 		t.Fatal("large weight should pick D")
 	}
 }
+
+func TestStatsCountsBudgetHits(t *testing.T) {
+	asg := []*pb.Assignment{{Pod: 0, Node: 1, Gpus: []int32{0}}, {Pod: 1, Node: 0, Gpus: []int32{0}}}
+	for status, want := range map[string]int{"OPTIMAL": 0, "FEASIBLE": 1} {
+		c, pods, typ := trap()
+		pl := placer(&fakeSolver{resp: &pb.PlaceResponse{Status: status, Assignments: asg}}, typ)
+		pl.PlaceBatch(c, pods)
+		if pl.Stats.Solved != 1 || pl.Stats.BudgetHit != want {
+			t.Fatalf("%s: solved=%d budgetHit=%d", status, pl.Stats.Solved, pl.Stats.BudgetHit)
+		}
+	}
+	c, pods, typ := trap()
+	pl := placer(&fakeSolver{resp: &pb.PlaceResponse{Status: "INFEASIBLE"}}, typ)
+	pl.PlaceBatch(c, pods)
+	if pl.Stats.Solved != 0 || pl.Stats.BudgetHit != 0 {
+		t.Fatalf("no usable answer must not count: %+v", pl.Stats)
+	}
+}

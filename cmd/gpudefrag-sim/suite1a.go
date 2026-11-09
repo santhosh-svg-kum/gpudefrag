@@ -75,6 +75,8 @@ type runSummary struct {
 	SolveP50     float64              `json:"solve_p50_ms"`
 	SolveP99     float64              `json:"solve_p99_ms"`
 	Stages       map[string]stageTime `json:"solve_stages_ms,omitempty"`
+	Solved       int                  `json:"solved_batches,omitempty"`
+	BudgetHit    int                  `json:"budget_hit_batches,omitempty"`
 	WallS        float64              `json:"wall_s"`
 }
 
@@ -168,6 +170,7 @@ func runSuite1a(args []string) error {
 					s.Improved, s.Batches, s.Fallbacks = pl.Stats.Improved, pl.Stats.Batches, pl.Stats.Fallbacks
 					s.SolveP50, s.SolveP99 = pctl(pl.Stats.SolveWall, 0.5), pctl(pl.Stats.SolveWall, 0.99)
 					s.Stages = stageTimes(pl.Stats)
+					s.Solved, s.BudgetHit = pl.Stats.Solved, pl.Stats.BudgetHit
 				}
 				results[j.v.Name] = append(results[j.v.Name], s)
 				fmt.Fprintf(os.Stderr, "  %-28s seed %d: final %.2f%% (%.0fs)\n", j.v.Name, j.seed, s.FinalAlloc, s.WallS)
@@ -239,6 +242,32 @@ func suite1aReport(vs []variant, results map[string][]runSummary, lo, hi int64) 
 	}
 	b.WriteString(pairedSection(vs, results))
 	b.WriteString(breakdownSection(vs, results))
+	b.WriteString(budgetSection(vs, results))
+	return b.String()
+}
+
+// budgetSection reports, per solver variant, the share of solved batches
+// where the time limit stopped CP-SAT before it proved optimality (status
+// FEASIBLE), summed over seeds. A high share means the result depends on
+// hardware speed. Empty when no variant solved a batch.
+func budgetSection(vs []variant, results map[string][]runSummary) string {
+	var b strings.Builder
+	for _, v := range vs {
+		solved, hit := 0, 0
+		for _, r := range results[v.Name] {
+			solved += r.Solved
+			hit += r.BudgetHit
+		}
+		if solved == 0 {
+			continue
+		}
+		if b.Len() == 0 {
+			fmt.Fprintf(&b, "\n## Solver budget\n\n")
+			fmt.Fprintf(&b, "Batches where the time limit stopped the search before optimality was proven (status FEASIBLE), over all seeds.\n\n")
+			fmt.Fprintf(&b, "| variant | budget hit / solved | share |\n|---|---|---|\n")
+		}
+		fmt.Fprintf(&b, "| %s | %d / %d | %.1f%% |\n", v.Name, hit, solved, 100*float64(hit)/float64(solved))
+	}
 	return b.String()
 }
 

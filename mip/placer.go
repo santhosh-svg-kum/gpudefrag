@@ -39,6 +39,10 @@ type Stats struct {
 	RPCWall     []time.Duration
 	SolverWall  []time.Duration
 	SearchWall  []time.Duration // CP-SAT search only; SolverWall - SearchWall is model build
+	// Solved counts solves that returned a usable status (OPTIMAL or
+	// FEASIBLE); BudgetHit counts those not proven optimal (FEASIBLE), i.e.
+	// the time limit stopped the search.
+	Solved, BudgetHit int
 }
 
 type Placer struct {
@@ -369,6 +373,12 @@ func (pl *Placer) solveOne(c *sim.Cluster, b batch, hint []*choice, fgd sched.FG
 	if resp.Status != "OPTIMAL" && resp.Status != "FEASIBLE" {
 		return nil, "status"
 	}
+	pl.mu.Lock()
+	pl.Stats.Solved++
+	if resp.Status == "FEASIBLE" {
+		pl.Stats.BudgetHit++
+	}
+	pl.mu.Unlock()
 	sol, ok := validate(c, pods, cands, resp.Assignments)
 	if !ok || !gangsWhole(c, b, sol) {
 		return nil, "invalid"
