@@ -43,7 +43,14 @@ type Stats struct {
 	// FEASIBLE); BudgetHit counts those not proven optimal (FEASIBLE), i.e.
 	// the time limit stopped the search.
 	Solved, BudgetHit int
+	// ByHint splits Batches and Improved by the hint's source: "fgd" or, with
+	// WarmStartBest, "binpack" when Binpack's placement beat FGD's.
+	ByHint map[string]HintStats
 }
+
+// HintStats counts batches warm-started from one hint source and how many of
+// them the solver improved on.
+type HintStats struct{ Batches, Improved int }
 
 type Placer struct {
 	Solver  Solver
@@ -172,11 +179,18 @@ func (pl *Placer) DecideRequests(c *sim.Cluster, reqs []Request) [][]*Choice {
 
 	// FGD (gang-aware) hint, or the better of FGD and Binpack if WarmStartBest.
 	hint := pl.hintFor(c, reqs, first, fgd)
+	src := "fgd"
 	if pl.WarmStartBest {
 		if bp := pl.hintFor(c, reqs, first, sched.Binpack{}); better(c, b.pods, bp, hint, pl.objective(), pl.GangFree, pl.GangWeight) {
-			hint = bp
+			hint, src = bp, "binpack"
 		}
 	}
+	if pl.Stats.ByHint == nil {
+		pl.Stats.ByHint = map[string]HintStats{}
+	}
+	hs := pl.Stats.ByHint[src]
+	hs.Batches++
+	defer func() { pl.Stats.ByHint[src] = hs }()
 
 	best := hint
 	stop := pl.prefetchNext(c, b, hint, fgd)
@@ -189,6 +203,7 @@ func (pl *Placer) DecideRequests(c *sim.Cluster, reqs []Request) [][]*Choice {
 	} else if better(c, b.pods, sol, hint, pl.objective(), pl.GangFree, pl.GangWeight) {
 		best = sol
 		pl.Stats.Improved++
+		hs.Improved++
 	}
 
 	out := make([][]*Choice, len(reqs))

@@ -30,6 +30,7 @@ type variant struct {
 	Limit time.Duration
 	K     int
 	Idle  float64
+	Warm  bool // warm-start from the better of FGD and Binpack
 }
 
 func parseVariant(s string) (variant, error) {
@@ -54,6 +55,8 @@ func parseVariant(s string) (variant, error) {
 			v.K, err = strconv.Atoi(val)
 		case "i":
 			v.Idle, err = strconv.ParseFloat(val, 64)
+		case "w":
+			v.Warm = val == "1"
 		default:
 			err = fmt.Errorf("unknown option %q", k)
 		}
@@ -72,12 +75,13 @@ type runSummary struct {
 	Improved     int       `json:"improved_batches"`
 	Batches      int       `json:"batches"`
 	Fallbacks    map[string]int
-	SolveP50     float64              `json:"solve_p50_ms"`
-	SolveP99     float64              `json:"solve_p99_ms"`
-	Stages       map[string]stageTime `json:"solve_stages_ms,omitempty"`
-	Solved       int                  `json:"solved_batches,omitempty"`
-	BudgetHit    int                  `json:"budget_hit_batches,omitempty"`
-	WallS        float64              `json:"wall_s"`
+	SolveP50     float64                  `json:"solve_p50_ms"`
+	SolveP99     float64                  `json:"solve_p99_ms"`
+	Stages       map[string]stageTime     `json:"solve_stages_ms,omitempty"`
+	Solved       int                      `json:"solved_batches,omitempty"`
+	BudgetHit    int                      `json:"budget_hit_batches,omitempty"`
+	ByHint       map[string]mip.HintStats `json:"by_hint,omitempty"`
+	WallS        float64                  `json:"wall_s"`
 }
 
 func runSuite1a(args []string) error {
@@ -151,7 +155,7 @@ func runSuite1a(args []string) error {
 				cfg := calib.RunConfig{Nodes: nodes, Pods: pods, Policy: j.v.Name, Seed: j.seed, Ratio: 1.3}
 				var pl *mip.Placer
 				if strings.HasPrefix(j.v.Name, "gpudefrag") {
-					pl = &mip.Placer{Solver: client, Typical: typical, K: j.v.K, TimeLimit: j.v.Limit, Deterministic: true, Workers: cpWorkers, IdleWeight: j.v.Idle}
+					pl = &mip.Placer{Solver: client, Typical: typical, K: j.v.K, TimeLimit: j.v.Limit, Deterministic: true, Workers: cpWorkers, IdleWeight: j.v.Idle, WarmStartBest: j.v.Warm}
 					cfg.Placer, cfg.Batch = pl, j.v.Batch
 				}
 				r, err := calib.RunDetailed(cfg)
@@ -171,6 +175,7 @@ func runSuite1a(args []string) error {
 					s.SolveP50, s.SolveP99 = pctl(pl.Stats.SolveWall, 0.5), pctl(pl.Stats.SolveWall, 0.99)
 					s.Stages = stageTimes(pl.Stats)
 					s.Solved, s.BudgetHit = pl.Stats.Solved, pl.Stats.BudgetHit
+					s.ByHint = pl.Stats.ByHint
 				}
 				results[j.v.Name] = append(results[j.v.Name], s)
 				fmt.Fprintf(os.Stderr, "  %-28s seed %d: final %.2f%% (%.0fs)\n", j.v.Name, j.seed, s.FinalAlloc, s.WallS)
@@ -243,6 +248,7 @@ func suite1aReport(vs []variant, results map[string][]runSummary, lo, hi int64) 
 	b.WriteString(pairedSection(vs, results))
 	b.WriteString(breakdownSection(vs, results))
 	b.WriteString(budgetSection(vs, results))
+	b.WriteString(hintSection(vs, results))
 	return b.String()
 }
 
@@ -267,6 +273,37 @@ func budgetSection(vs []variant, results map[string][]runSummary) string {
 			fmt.Fprintf(&b, "| variant | budget hit / solved | share |\n|---|---|---|\n")
 		}
 		fmt.Fprintf(&b, "| %s | %d / %d | %.1f%% |\n", v.Name, hit, solved, 100*float64(hit)/float64(solved))
+	}
+	return b.String()
+}
+
+// hintSection reports, per solver variant and hint source, the share of
+// batches where the solver beat its warm-start hint, summed over seeds.
+// Empty when no variant has hint data.
+func hintSection(vs []variant, results map[string][]runSummary) string {
+	var b strings.Builder
+	for _, v := range vs {
+		tot := map[string]mip.HintStats{}
+		for _, r := range results[v.Name] {
+			for src, h := range r.ByHint {
+				t := tot[src]
+				t.Batches += h.Batches
+				t.Improved += h.Improved
+				tot[src] = t
+			}
+		}
+		for _, src := range []string{"fgd", "binpack"} {
+			t := tot[src]
+			if t.Batches == 0 {
+				continue
+			}
+			if b.Len() == 0 {
+				fmt.Fprintf(&b, "\n## Solver vs warm-start hint\n\n")
+				fmt.Fprintf(&b, "Batches where the solver's answer beat its hint by the batch objective, split by hint source (binpack = Binpack beat FGD under `w=1`), over all seeds.\n\n")
+				fmt.Fprintf(&b, "| variant | hint | beat hint / batches | share |\n|---|---|---|---|\n")
+			}
+			fmt.Fprintf(&b, "| %s | %s | %d / %d | %.1f%% |\n", v.Name, src, t.Improved, t.Batches, 100*float64(t.Improved)/float64(t.Batches))
+		}
 	}
 	return b.String()
 }
