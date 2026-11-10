@@ -379,3 +379,29 @@ func TestStatsCountsBudgetHits(t *testing.T) {
 		t.Fatalf("no usable answer must not count: %+v", pl.Stats)
 	}
 }
+
+func TestStatsSplitsByHintSource(t *testing.T) {
+	// Default: FGD hint, solver returns FGD's own answer -> no improvement.
+	c, pods, typ := trap()
+	pl := placer(&fakeSolver{resp: &pb.PlaceResponse{Status: "FEASIBLE"}}, typ)
+	pl.PlaceBatch(c, pods)
+	if got := pl.Stats.ByHint["fgd"]; got.Batches != 1 || got.Improved != 0 || len(pl.Stats.ByHint) != 1 {
+		t.Fatalf("fgd hint: %+v", pl.Stats.ByHint)
+	}
+	// Solver finds the two-pod placement FGD misses -> improved over the FGD hint.
+	asg := []*pb.Assignment{{Pod: 0, Node: 1, Gpus: []int32{0}}, {Pod: 1, Node: 0, Gpus: []int32{0}}}
+	c, pods, typ = trap()
+	pl = placer(&fakeSolver{resp: &pb.PlaceResponse{Status: "FEASIBLE", Assignments: asg}}, typ)
+	pl.PlaceBatch(c, pods)
+	if got := pl.Stats.ByHint["fgd"]; got.Batches != 1 || got.Improved != pl.Stats.Improved {
+		t.Fatalf("improved split: %+v vs %d", pl.Stats.ByHint, pl.Stats.Improved)
+	}
+	// WarmStartBest on the trap: Binpack's hint wins and is recorded as such.
+	c, pods, typ = trap()
+	pl = placer(&fakeSolver{resp: &pb.PlaceResponse{Status: "FEASIBLE"}}, typ)
+	pl.WarmStartBest = true
+	pl.PlaceBatch(c, pods)
+	if got := pl.Stats.ByHint["binpack"]; got.Batches != 1 || pl.Stats.ByHint["fgd"].Batches != 0 {
+		t.Fatalf("binpack hint: %+v", pl.Stats.ByHint)
+	}
+}

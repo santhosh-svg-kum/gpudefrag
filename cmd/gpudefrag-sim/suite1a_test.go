@@ -84,3 +84,27 @@ func TestBudgetSection(t *testing.T) {
 		t.Fatal("section must be empty without solved batches")
 	}
 }
+
+func TestHintSection(t *testing.T) {
+	vs := []variant{{Name: "FGD"}, {Name: "gpudefrag:b=16:w=1"}}
+	res := map[string][]runSummary{
+		"FGD": {{Seed: 42}},
+		"gpudefrag:b=16:w=1": {
+			{Seed: 42, ByHint: map[string]mip.HintStats{"fgd": {Batches: 80, Improved: 8}, "binpack": {Batches: 20, Improved: 1}}},
+			{Seed: 43, ByHint: map[string]mip.HintStats{"fgd": {Batches: 20, Improved: 2}}},
+		},
+	}
+	rep := hintSection(vs, res)
+	for _, w := range []string{"| gpudefrag:b=16:w=1 | fgd | 10 / 100 | 10.0% |", "| gpudefrag:b=16:w=1 | binpack | 1 / 20 | 5.0% |"} {
+		if !strings.Contains(rep, w) {
+			t.Fatalf("missing %q:\n%s", w, rep)
+		}
+	}
+	if strings.Contains(rep, "| FGD |") || hintSection(vs[:1], res) != "" {
+		t.Fatal("baselines and empty data must produce nothing")
+	}
+	v, err := parseVariant("gpudefrag:b=16:w=1")
+	if err != nil || !v.Warm {
+		t.Fatalf("w=1 not parsed: %+v %v", v, err)
+	}
+}
