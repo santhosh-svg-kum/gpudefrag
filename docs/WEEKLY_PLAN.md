@@ -34,3 +34,13 @@
 - [x] 5b. Turn the gang-free tie-breaker into a weighted objective term (`GangWeight` milli-GPU per free-whole-node-domain unit) in `mip.evaluate`, default 0 = current behavior, and expose `-gang-weight`. Tests on a cluster where the weight flips a non-tied choice.
 - [x] 6. Solver budget sensitivity: record the fraction of batches that hit the time limit in `mip.Stats` and show it in the suite reports. Tests.
 - [x] 7. Warm-start comparison: in the suite 1a report, add the share of batches where the solver beat its hint, split by hint source (FGD vs Binpack-or-FGD). Tests.
+
+## Week 4
+
+- [ ] 1. Defrag sweep driver: a `make sweep-defrag` target (or `-sweep-grid` flag) that runs suite 1b over `-restart-sweep` x `-grace` values and writes one combined table to `results/`. Test the grid expansion and table formatting with a fake runner; do not publish numbers.
+- [ ] 2. Break-even report: from a sweep table, compute the smallest restart time at which defrag stops beating its no-defrag baseline on mean allocation (linear interpolation, `n/a` if never). Pure function with table-driven tests.
+- [ ] 3. Hysteresis visibility: count plans refused by the benefit-vs-cost rule in `timed` defrag and show the count in the suite 1b report. Tests with a cluster where the rule refuses and one where it accepts.
+- [ ] 4. Solver budget plumbing: expose the per-batch CP-SAT time limit as `-solver-budget-ms` in all suites (default unchanged at 500) and print the value in report headers. Tests for flag parsing and header text.
+- [ ] 5. Fallback accounting: in suite reports, separate "solver status fallback" from "time limit hit" batch counts and show both. Tests on `mip.Stats`.
+- [ ] 6. Pattern-gen reuse across defrag planning: let the defrag planner share the placer's pattern cache for its what-if placements, behind a flag defaulting off. Test identical plans with and without it.
+- [ ] 7. Elastic-mode design note: `docs/design/notes/` entry sketching how defrag and node provisioning would be merged into one decision (inputs, objective, what the proto would need), listing open questions. Docs only; no code.
