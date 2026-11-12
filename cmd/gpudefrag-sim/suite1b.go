@@ -68,6 +68,7 @@ func runSuite1b(args []string) error {
 	restart := fs.Float64("restart", 60, "seconds a migrated pod spends restarting under +defrag variants")
 	grace := fs.Float64("grace", 0, "eviction grace period in seconds: victims hold resources and the blocked pod binds this much later under +defrag variants")
 	restartSweep := fs.String("restart-sweep", "", "comma-separated restart times (e.g. 60,300,900): run each +defrag variant once per value (overrides -restart)")
+	graceSweep := fs.String("grace-sweep", "", "comma-separated grace periods (e.g. 0,30): crossed with -restart-sweep, one run per +defrag variant per cell (overrides -grace)")
 	fs.Parse(args)
 
 	allNodes, err := trace.LoadOpenbNodes(filepath.Join(*data, "openb", "openb_node_list_gpu_node.csv"))
@@ -126,7 +127,7 @@ func runSuite1b(args []string) error {
 				n := int(workload.ArrivalRate(base, capMilli, j.load, maxDur.Seconds()) * window)
 				arrivals := workload.Synthesize(rand.New(rand.NewSource(j.seed)), base, capMilli, j.load, n, maxDur.Seconds())
 				cfg := timed.Config{Nodes: nodes, Jobs: arrivals, Batch: *batch, MeasureFrom: warm.Seconds(), DrainLimit: 1}
-				vname, rst := splitRestart(j.variant, *restart)
+				vname, rst, grc := splitVariant(j.variant, *restart, *grace)
 				name, defrag := strings.CutSuffix(vname, "+defrag")
 				var pl *mip.Placer
 				switch name {
@@ -143,7 +144,7 @@ func runSuite1b(args []string) error {
 				if defrag {
 					cfg.Defrag = &timed.DefragConfig{
 						Planner:  &mip.Defragmenter{Solver: client, MaxMoves: 4, TimeLimit: time.Second, Deterministic: true, Workers: cpWorkers},
-						Interval: 60, CheckpointInterval: 1800, Restart: rst, Grace: *grace, BenefitHorizon: 3600, Margin: 0.2, Seed: j.seed,
+						Interval: 60, CheckpointInterval: 1800, Restart: rst, Grace: grc, BenefitHorizon: 3600, Margin: 0.2, Seed: j.seed,
 					}
 				}
 				r := timed.Run(cfg)
@@ -170,7 +171,7 @@ func runSuite1b(args []string) error {
 			}
 		}()
 	}
-	vs, err := restartVariants(strings.Split(*variants, ","), *restartSweep)
+	vs, err := gridVariants(strings.Split(*variants, ","), *restartSweep, *graceSweep)
 	if err != nil {
 		return err
 	}
