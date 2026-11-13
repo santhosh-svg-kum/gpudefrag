@@ -38,7 +38,7 @@
 ## Week 4
 
 - [x] 1. Defrag sweep driver (`-grace-sweep` crossed with `-restart-sweep`, `make sweep-defrag`; one row per grid cell in the suite 1b report): a `make sweep-defrag` target (or `-sweep-grid` flag) that runs suite 1b over `-restart-sweep` x `-grace` values and writes one combined table to `results/`. Test the grid expansion and table formatting with a fake runner; do not publish numbers.
-- [ ] 2. Break-even report: from a sweep table, compute the smallest restart time at which defrag stops beating its no-defrag baseline on mean allocation (linear interpolation, `n/a` if never). Pure function with table-driven tests.
+- [x] 2. Break-even report: from a sweep table, compute the smallest restart time at which defrag stops beating its no-defrag baseline on mean allocation (linear interpolation, `n/a` if never). Pure function with table-driven tests.
 - [ ] 3. Hysteresis visibility: count plans refused by the benefit-vs-cost rule in `timed` defrag and show the count in the suite 1b report. Tests with a cluster where the rule refuses and one where it accepts.
 - [ ] 4. Solver budget plumbing: expose the per-batch CP-SAT time limit as `-solver-budget-ms` in all suites (default unchanged at 500) and print the value in report headers. Tests for flag parsing and header text.
 - [ ] 5. Fallback accounting: in suite reports, separate "solver status fallback" from "time limit hit" batch counts and show both. Tests on `mip.Stats`.
