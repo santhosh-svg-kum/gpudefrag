@@ -235,6 +235,20 @@ func suite1bReport(vs []string, ls []float64, runs []run1b, lo, hi int64, desc s
 				col(func(r run1b) float64 { return r.LostGpuH }, 1), col(func(r run1b) float64 { return r.SolveP99 }, 0))
 		}
 		b.WriteString("\n")
+		fmt.Fprintf(&b, "Defrag plans refused by hysteresis (benefit-vs-cost rule), mean ± 95%% CI per run:\n\n| variant | plans executed | plans refused by hysteresis |\n|---|---|---|\n")
+		for _, v := range vs {
+			var pl, hy []float64
+			for _, r := range runs {
+				if r.Variant == v && r.Load == l {
+					pl = append(pl, float64(r.Plans))
+					hy = append(hy, float64(r.Rejected["hysteresis"]))
+				}
+			}
+			pm, pc := meanCI(pl)
+			hm, hc := meanCI(hy)
+			fmt.Fprintf(&b, "| %s | %.1f ± %.1f | %.1f ± %.1f |\n", v, pm, pc, hm, hc)
+		}
+		b.WriteString("\n")
 	}
 	return b.String()
 }
