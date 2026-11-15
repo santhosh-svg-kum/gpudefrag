@@ -104,7 +104,7 @@ func runSuite2(args []string) error {
 	windows := fs.Int("windows", 4, "busiest non-overlapping weeks to replay")
 	domainSize := fs.Int("domain", 4, "nodes per topology domain; gangs up to this many pods stay in one domain")
 	batch := fs.Int("batch", 16, "jobs per scheduling session")
-	limit := fs.Duration("time", 500*time.Millisecond, "gpudefrag solver budget per batch")
+	budgetMs := fs.Int("solver-budget-ms", defaultBudgetMs, "CP-SAT time limit per batch in ms for gpudefrag variants")
 	objW := fs.Float64("obj-gpu-weight", 1, "gpudefrag objective: GPU weight for typical classes (FGD gpuResWeight); 0 = FGD's count weighting")
 	idle := fs.Float64("idle-weight", -1, "gpudefrag penalty (milli-GPU) for opening an idle node; <0 lexicographic, 0 off")
 	warmBest := fs.Bool("warm-best", false, "gpudefrag warm-starts from the better of FGD and Binpack placements (default: FGD only)")
@@ -118,6 +118,9 @@ func runSuite2(args []string) error {
 	grace := fs.Float64("grace", 0, "eviction grace period in seconds: victims hold resources and the blocked pod binds this much later under +defrag variants")
 	restartSweep := fs.String("restart-sweep", "", "comma-separated restart times (e.g. 60,300,900): run each +defrag variant once per value (overrides -restart)")
 	fs.Parse(args)
+	if *budgetMs <= 0 {
+		return fmt.Errorf("-solver-budget-ms must be positive, got %d", *budgetMs)
+	}
 
 	all, st, err := trace.LoadHelios(filepath.Join(*data, "helios", "data", *cluster, "cluster_log.csv"))
 	if err != nil {
@@ -188,7 +191,7 @@ func runSuite2(args []string) error {
 				name, defrag := strings.CutSuffix(vname, "+defrag")
 				var pl *mip.Placer
 				if name == "gpudefrag" {
-					pl = &mip.Placer{Solver: client, Typical: typical, K: 16, TimeLimit: *limit, Deterministic: true, Workers: cpWorkers, IdleWeight: *idle, ObjectiveTypical: objTypical, WarmStartBest: *warmBest, GangFree: *gangFree, GangWeight: *gangWeight}
+					pl = &mip.Placer{Solver: client, Typical: typical, K: 16, TimeLimit: time.Duration(*budgetMs) * time.Millisecond, Deterministic: true, Workers: cpWorkers, IdleWeight: *idle, ObjectiveTypical: objTypical, WarmStartBest: *warmBest, GangFree: *gangFree, GangWeight: *gangWeight}
 					cfg.Decider = pl
 				} else {
 					pol, err := sched.New(name, typical)
@@ -254,7 +257,7 @@ func runSuite2(args []string) error {
 		weeks = append(weeks, st.Start.Add(time.Duration(s)*time.Second).Format("2006-01-02"))
 	}
 	desc := fmt.Sprintf("Helios %s backtest: %d nodes x 8 GPUs, synthetic topology domains of %d nodes (gangs of <= %d pods must stay in one domain). Real submit times and durations; windows = the %d busiest weeks by submitted GPU-hours (starting %s), each after 3 days of warm-up replay. Dropped rows: %d CPU-only, %d uneven gangs, %d zero-duration",
-		*cluster, len(nodes), *domainSize, *domainSize, len(starts), strings.Join(weeks, ", "), st.CPUOnly, st.Uneven, st.ZeroDuration) + suite2GangNote(*gangFree)
+		*cluster, len(nodes), *domainSize, *domainSize, len(starts), strings.Join(weeks, ", "), st.CPUOnly, st.Uneven, st.ZeroDuration) + budgetNote(*budgetMs) + suite2GangNote(*gangFree)
 	report := suite2Report(vs, cs, runs, desc)
 	fmt.Print(report)
 	return os.WriteFile(filepath.Join(*out, "report.md"), []byte(report), 0o644)

@@ -57,7 +57,7 @@ func runSuite1b(args []string) error {
 	seedLo := fs.Int64("seed-from", 42, "first seed")
 	seedHi := fs.Int64("seed-to", 46, "last seed")
 	batch := fs.Int("batch", 16, "pods per scheduling session")
-	limit := fs.Duration("time", 500*time.Millisecond, "gpudefrag solver budget per batch")
+	budgetMs := fs.Int("solver-budget-ms", defaultBudgetMs, "CP-SAT time limit per batch in ms for gpudefrag variants")
 	objW := fs.Float64("obj-gpu-weight", 1, "gpudefrag objective: GPU weight for typical classes (FGD gpuResWeight); 0 = FGD's count weighting")
 	idle := fs.Float64("idle-weight", -1, "gpudefrag penalty (milli-GPU) for opening an idle node; <0 lexicographic, 0 off")
 	warmBest := fs.Bool("warm-best", false, "gpudefrag warm-starts from the better of FGD and Binpack placements (default: FGD only)")
@@ -70,6 +70,9 @@ func runSuite1b(args []string) error {
 	restartSweep := fs.String("restart-sweep", "", "comma-separated restart times (e.g. 60,300,900): run each +defrag variant once per value (overrides -restart)")
 	graceSweep := fs.String("grace-sweep", "", "comma-separated grace periods (e.g. 0,30): crossed with -restart-sweep, one run per +defrag variant per cell (overrides -grace)")
 	fs.Parse(args)
+	if *budgetMs <= 0 {
+		return fmt.Errorf("-solver-budget-ms must be positive, got %d", *budgetMs)
+	}
 
 	allNodes, err := trace.LoadOpenbNodes(filepath.Join(*data, "openb", "openb_node_list_gpu_node.csv"))
 	if err != nil {
@@ -132,7 +135,7 @@ func runSuite1b(args []string) error {
 				var pl *mip.Placer
 				switch name {
 				case "gpudefrag":
-					pl = &mip.Placer{Solver: client, Typical: typical, K: 16, TimeLimit: *limit, Deterministic: true, Workers: cpWorkers, IdleWeight: *idle, ObjectiveTypical: objTypical, WarmStartBest: *warmBest}
+					pl = &mip.Placer{Solver: client, Typical: typical, K: 16, TimeLimit: time.Duration(*budgetMs) * time.Millisecond, Deterministic: true, Workers: cpWorkers, IdleWeight: *idle, ObjectiveTypical: objTypical, WarmStartBest: *warmBest}
 					cfg.Decider = pl
 				default:
 					pol, err := sched.New(name, typical)
@@ -200,7 +203,7 @@ func runSuite1b(args []string) error {
 	if err := os.WriteFile(filepath.Join(*out, "runs.json"), b, 0o644); err != nil {
 		return err
 	}
-	desc := fmt.Sprintf("%d of %d openb GPU nodes (stratified by GPU type and count); Poisson arrivals at the given offered GPU load; (pod, duration) pairs resampled from openb with durations capped at %s; %s warm-up excluded, metrics over the next %s", len(nodes), len(allNodes), *maxDur, *warm, *measure)
+	desc := fmt.Sprintf("%d of %d openb GPU nodes (stratified by GPU type and count); Poisson arrivals at the given offered GPU load; (pod, duration) pairs resampled from openb with durations capped at %s; %s warm-up excluded, metrics over the next %s", len(nodes), len(allNodes), *maxDur, *warm, *measure) + budgetNote(*budgetMs)
 	report := suite1bReport(vs, ls, runs, *seedLo, *seedHi, desc)
 	fmt.Print(report)
 	return os.WriteFile(filepath.Join(*out, "report.md"), []byte(report), 0o644)

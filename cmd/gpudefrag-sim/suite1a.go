@@ -34,12 +34,18 @@ type variant struct {
 }
 
 func parseVariant(s string) (variant, error) {
+	return parseVariantBudget(s, defaultBudgetMs)
+}
+
+// parseVariantBudget is parseVariant with the CP-SAT budget (ms) used by
+// gpudefrag variants that carry no explicit t= option.
+func parseVariantBudget(s string, budgetMs int) (variant, error) {
 	parts := strings.Split(s, ":")
 	v := variant{Name: s, Batch: 1}
 	if parts[0] != "gpudefrag" {
 		return v, nil
 	}
-	v.Batch, v.Limit, v.K = 16, 500*time.Millisecond, 16
+	v.Batch, v.Limit, v.K = 16, time.Duration(budgetMs)*time.Millisecond, 16
 	for _, p := range parts[1:] {
 		k, val, ok := strings.Cut(p, "=")
 		if !ok {
@@ -95,7 +101,11 @@ func runSuite1a(args []string) error {
 	solverDir := fs.String("solver-dir", "solver", "python solver project")
 	solverProcs := fs.Int("solver-procs", 1, "solver processes to start locally (requests are round-robined)")
 	addr := fs.String("solver", "", "solver address (default: start one locally)")
+	budgetMs := fs.Int("solver-budget-ms", defaultBudgetMs, "CP-SAT time limit per batch in ms for gpudefrag variants without an explicit t= option")
 	fs.Parse(args)
+	if *budgetMs <= 0 {
+		return fmt.Errorf("-solver-budget-ms must be positive, got %d", *budgetMs)
+	}
 
 	nodes, err := trace.LoadOpenbNodes(filepath.Join(*data, "openb", "openb_node_list_gpu_node.csv"))
 	if err != nil {
@@ -113,7 +123,7 @@ func runSuite1a(args []string) error {
 	var vs []variant
 	needSolver := false
 	for _, s := range strings.Split(*variants, ",") {
-		v, err := parseVariant(s)
+		v, err := parseVariantBudget(s, *budgetMs)
 		if err != nil {
 			return err
 		}
@@ -203,15 +213,15 @@ func runSuite1a(args []string) error {
 	if err := os.WriteFile(filepath.Join(*out, "runs.json"), b, 0o644); err != nil {
 		return err
 	}
-	report := suite1aReport(vs, results, *seedLo, *seedHi)
+	report := suite1aReport(vs, results, *seedLo, *seedHi, *budgetMs)
 	fmt.Print(report)
 	return os.WriteFile(filepath.Join(*out, "report.md"), []byte(report), 0o644)
 }
 
-func suite1aReport(vs []variant, results map[string][]runSummary, lo, hi int64) string {
+func suite1aReport(vs []variant, results map[string][]runSummary, lo, hi int64, budgetMs int) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "# Suite 1a — openb default, FGD protocol (arrival-only, 130%% load)\n\n")
-	fmt.Fprintf(&b, "Seeds %d–%d, mean ± 95%% CI. Allocation = allocated GPU / cluster GPU at the given arrived load.\n\n", lo, hi)
+	fmt.Fprintf(&b, "Seeds %d–%d, mean ± 95%% CI. Allocation = allocated GPU / cluster GPU at the given arrived load.%s\n\n", lo, hi, budgetNote(budgetMs))
 	fmt.Fprintf(&b, "| variant | alloc@100%% | alloc@120%% | alloc@130%% | final alloc %% | unplaced GPU demand %% of cap | improved batches | solve p50 / p99 ms | fallbacks |\n")
 	fmt.Fprintf(&b, "|---|---|---|---|---|---|---|---|---|\n")
 	for _, v := range vs {
