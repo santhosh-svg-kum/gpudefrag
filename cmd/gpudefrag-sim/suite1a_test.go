@@ -24,7 +24,7 @@ func TestSuite1aReportPaired(t *testing.T) {
 		"gpudefrag:b=16:t=500ms": mk(95.2, 95.4, 94.9),
 		"BestFit":                mk(93, 93, 93),
 	}
-	rep := suite1aReport(vs, res, 42, 44)
+	rep := suite1aReport(vs, res, 42, 44, 500)
 	if !strings.Contains(rep, "Paired by seed vs FGD at 130% load") {
 		t.Fatalf("missing paired section:\n%s", rep)
 	}
@@ -39,7 +39,7 @@ func TestSuite1aReportPaired(t *testing.T) {
 func TestSuite1aReportNoPairedWithoutFGD(t *testing.T) {
 	vs := []variant{{Name: "BestFit"}}
 	res := map[string][]runSummary{"BestFit": {{Seed: 42, Curve: make([]float64, 131)}}}
-	if strings.Contains(suite1aReport(vs, res, 42, 42), "Paired") {
+	if strings.Contains(suite1aReport(vs, res, 42, 42, 500), "Paired") {
 		t.Fatal("unexpected paired section")
 	}
 }
