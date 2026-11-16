@@ -86,6 +86,8 @@ type runSummary struct {
 	Stages       map[string]stageTime     `json:"solve_stages_ms,omitempty"`
 	Solved       int                      `json:"solved_batches,omitempty"`
 	BudgetHit    int                      `json:"budget_hit_batches,omitempty"`
+	NoSolution   int                      `json:"timeout_no_solution_batches,omitempty"`
+	StatusOther  int                      `json:"other_status_fallback_batches,omitempty"`
 	ByHint       map[string]mip.HintStats `json:"by_hint,omitempty"`
 	WallS        float64                  `json:"wall_s"`
 }
@@ -185,6 +187,7 @@ func runSuite1a(args []string) error {
 					s.SolveP50, s.SolveP99 = pctl(pl.Stats.SolveWall, 0.5), pctl(pl.Stats.SolveWall, 0.99)
 					s.Stages = stageTimes(pl.Stats)
 					s.Solved, s.BudgetHit = pl.Stats.Solved, pl.Stats.BudgetHit
+					s.NoSolution, s.StatusOther = pl.Stats.NoSolution, pl.Stats.StatusOther
 					s.ByHint = pl.Stats.ByHint
 				}
 				results[j.v.Name] = append(results[j.v.Name], s)
@@ -265,24 +268,30 @@ func suite1aReport(vs []variant, results map[string][]runSummary, lo, hi int64, 
 // budgetSection reports, per solver variant, the share of solved batches
 // where the time limit stopped CP-SAT before it proved optimality (status
 // FEASIBLE), summed over seeds. A high share means the result depends on
-// hardware speed. Empty when no variant solved a batch.
+// hardware speed. Empty when no variant solved a batch or fell back on status.
 func budgetSection(vs []variant, results map[string][]runSummary) string {
 	var b strings.Builder
 	for _, v := range vs {
-		solved, hit := 0, 0
+		solved, hit, noSol, other := 0, 0, 0, 0
 		for _, r := range results[v.Name] {
 			solved += r.Solved
 			hit += r.BudgetHit
+			noSol += r.NoSolution
+			other += r.StatusOther
 		}
-		if solved == 0 {
+		if solved+noSol+other == 0 {
 			continue
 		}
 		if b.Len() == 0 {
 			fmt.Fprintf(&b, "\n## Solver budget\n\n")
-			fmt.Fprintf(&b, "Batches where the time limit stopped the search before optimality was proven (status FEASIBLE), over all seeds.\n\n")
-			fmt.Fprintf(&b, "| variant | budget hit / solved | share |\n|---|---|---|\n")
+			fmt.Fprintf(&b, "Batches where the time limit stopped the search before optimality was proven (status FEASIBLE), over all seeds. The last two columns split the `status` fallbacks: the time limit expired with no feasible answer (UNKNOWN), or any other non-usable status (INFEASIBLE, MODEL_INVALID, ...).\n\n")
+			fmt.Fprintf(&b, "| variant | budget hit / solved | share | timeout, no solution | other status fallback |\n|---|---|---|---|---|\n")
 		}
-		fmt.Fprintf(&b, "| %s | %d / %d | %.1f%% |\n", v.Name, hit, solved, 100*float64(hit)/float64(solved))
+		share := "–"
+		if solved > 0 {
+			share = fmt.Sprintf("%.1f%%", 100*float64(hit)/float64(solved))
+		}
+		fmt.Fprintf(&b, "| %s | %d / %d | %s | %d | %d |\n", v.Name, hit, solved, share, noSol, other)
 	}
 	return b.String()
 }

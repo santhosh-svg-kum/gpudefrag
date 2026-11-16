@@ -41,6 +41,6 @@
 - [x] 2. Break-even report: from a sweep table, compute the smallest restart time at which defrag stops beating its no-defrag baseline on mean allocation (linear interpolation, `n/a` if never). Pure function with table-driven tests.
 - [x] 3. Hysteresis visibility: count plans refused by the benefit-vs-cost rule in `timed` defrag and show the count in the suite 1b report. Tests with a cluster where the rule refuses and one where it accepts.
 - [x] 4. Solver budget plumbing: expose the per-batch CP-SAT time limit as `-solver-budget-ms` in all suites (default unchanged at 500) and print the value in report headers. Tests for flag parsing and header text.
-- [ ] 5. Fallback accounting: in suite reports, separate "solver status fallback" from "time limit hit" batch counts and show both. Tests on `mip.Stats`.
+- [x] 5. Fallback accounting: in suite reports, separate "solver status fallback" from "time limit hit" batch counts and show both. Tests on `mip.Stats`.
 - [ ] 6. Pattern-gen reuse across defrag planning: let the defrag planner share the placer's pattern cache for its what-if placements, behind a flag defaulting off. Test identical plans with and without it.
 - [ ] 7. Elastic-mode design note: `docs/design/notes/` entry sketching how defrag and node provisioning would be merged into one decision (inputs, objective, what the proto would need), listing open questions. Docs only; no code.
