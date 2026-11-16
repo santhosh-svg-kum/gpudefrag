@@ -85,6 +85,22 @@ func TestBudgetSection(t *testing.T) {
 	}
 }
 
+func TestBudgetSectionSeparatesFallbackKinds(t *testing.T) {
+	vs := []variant{{Name: "g"}}
+	res := map[string][]runSummary{"g": {
+		{Seed: 1, Solved: 90, BudgetHit: 10, NoSolution: 4, StatusOther: 1},
+		{Seed: 2, Solved: 90, BudgetHit: 10, NoSolution: 3, StatusOther: 2},
+	}}
+	rep := budgetSection(vs, res)
+	if !strings.Contains(rep, "| g | 20 / 180 | 11.1% | 7 | 3 |") {
+		t.Fatalf("bad split:\n%s", rep)
+	}
+	// Only fallbacks, nothing solved: still reported.
+	if r := budgetSection(vs, map[string][]runSummary{"g": {{Seed: 1, NoSolution: 2}}}); !strings.Contains(r, "| g | 0 / 0 | – | 2 | 0 |") {
+		t.Fatalf("fallback-only row missing:\n%s", r)
+	}
+}
+
 func TestHintSection(t *testing.T) {
 	vs := []variant{{Name: "FGD"}, {Name: "gpudefrag:b=16:w=1"}}
 	res := map[string][]runSummary{

@@ -43,6 +43,10 @@ type Stats struct {
 	// FEASIBLE); BudgetHit counts those not proven optimal (FEASIBLE), i.e.
 	// the time limit stopped the search.
 	Solved, BudgetHit int
+	// The "status" fallbacks, split: NoSolution counts UNKNOWN (the time limit
+	// expired before any feasible answer), StatusOther everything else
+	// (INFEASIBLE, MODEL_INVALID, ...).
+	NoSolution, StatusOther int
 	// ByHint splits Batches and Improved by the hint's source: "fgd" or, with
 	// WarmStartBest, "binpack" when Binpack's placement beat FGD's.
 	ByHint map[string]HintStats
@@ -386,6 +390,13 @@ func (pl *Placer) solveOne(c *sim.Cluster, b batch, hint []*choice, fgd sched.FG
 		return nil, "rpc"
 	}
 	if resp.Status != "OPTIMAL" && resp.Status != "FEASIBLE" {
+		pl.mu.Lock()
+		if resp.Status == "UNKNOWN" {
+			pl.Stats.NoSolution++
+		} else {
+			pl.Stats.StatusOther++
+		}
+		pl.mu.Unlock()
 		return nil, "status"
 	}
 	pl.mu.Lock()

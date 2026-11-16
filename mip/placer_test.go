@@ -380,6 +380,17 @@ func TestStatsCountsBudgetHits(t *testing.T) {
 	}
 }
 
+func TestStatsSeparatesTimeoutFromOtherStatusFallbacks(t *testing.T) {
+	for status, want := range map[string][2]int{"UNKNOWN": {1, 0}, "INFEASIBLE": {0, 1}, "MODEL_INVALID": {0, 1}} {
+		c, pods, typ := trap()
+		pl := placer(&fakeSolver{resp: &pb.PlaceResponse{Status: status}}, typ)
+		pl.PlaceBatch(c, pods)
+		if pl.Stats.NoSolution != want[0] || pl.Stats.StatusOther != want[1] || pl.Stats.Fallbacks["status"] != 1 {
+			t.Fatalf("%s: noSolution=%d other=%d fallbacks=%v", status, pl.Stats.NoSolution, pl.Stats.StatusOther, pl.Stats.Fallbacks)
+		}
+	}
+}
+
 func TestStatsSplitsByHintSource(t *testing.T) {
 	// Default: FGD hint, solver returns FGD's own answer -> no improvement.
 	c, pods, typ := trap()
