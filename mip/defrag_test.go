@@ -100,3 +100,41 @@ func TestDefragRealSolver(t *testing.T) {
 		t.Fatalf("expected moving the cheaper pod: %+v %s", p, why)
 	}
 }
+
+func TestDefragStatsRecordsRPCWallAndStatus(t *testing.T) {
+	c, run, blocked := defragFixture()
+	f := &fakeDefrag{resp: &pb.DefragResponse{Status: "INFEASIBLE"}}
+	d := &Defragmenter{Solver: f, MaxMoves: 2, TimeLimit: time.Second}
+	d.Plan(c, blocked, run)
+	d.Plan(c, blocked, run)
+	f.resp = &pb.DefragResponse{Status: "OPTIMAL", Moves: []*pb.Move{{Pod: 11, ToNode: 0, Gpus: []int32{1}}}}
+	d.Plan(c, blocked, run)
+	st := d.Stats()
+	if len(st.RPCWall) != 3 {
+		t.Fatalf("RPCWall len = %d, want 3", len(st.RPCWall))
+	}
+	if st.Status["INFEASIBLE"] != 2 || st.Status["OPTIMAL"] != 1 {
+		t.Fatalf("status counts = %v", st.Status)
+	}
+	// Snapshot must not alias internal state.
+	st.Status["OPTIMAL"] = 99
+	if d.Stats().Status["OPTIMAL"] != 1 {
+		t.Fatal("Stats() aliases internal map")
+	}
+}
+
+func TestDefragStatsCountsRPCErrors(t *testing.T) {
+	c, run, blocked := defragFixture()
+	d := &Defragmenter{Solver: errDefrag{}, MaxMoves: 2, TimeLimit: time.Second}
+	d.Plan(c, blocked, run)
+	st := d.Stats()
+	if st.Status["rpc_error"] != 1 || len(st.RPCWall) != 1 {
+		t.Fatalf("got %+v", st)
+	}
+}
+
+type errDefrag struct{}
+
+func (errDefrag) Defrag(context.Context, *pb.DefragRequest, ...grpc.CallOption) (*pb.DefragResponse, error) {
+	return nil, context.DeadlineExceeded
+}
