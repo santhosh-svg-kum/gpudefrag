@@ -4,6 +4,7 @@ import (
 	"context"
 	"math"
 	"sort"
+	"sync"
 	"time"
 
 	"google.golang.org/grpc"
@@ -50,6 +51,37 @@ type Defragmenter struct {
 	Receivers     int // extra receiving nodes by free GPU (default 64)
 	Deterministic bool
 	Workers       int
+
+	mu    sync.Mutex
+	stats DefragStats
+}
+
+// DefragStats records the planning cost of every Defrag RPC: its wall time and
+// the solver status returned ("rpc_error" when the call itself failed).
+type DefragStats struct {
+	RPCWall []time.Duration
+	Status  map[string]int
+}
+
+// Stats returns a snapshot of the RPC stats recorded so far.
+func (d *Defragmenter) Stats() DefragStats {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	out := DefragStats{RPCWall: append([]time.Duration(nil), d.stats.RPCWall...), Status: map[string]int{}}
+	for k, v := range d.stats.Status {
+		out.Status[k] = v
+	}
+	return out
+}
+
+func (d *Defragmenter) record(wall time.Duration, status string) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if d.stats.Status == nil {
+		d.stats.Status = map[string]int{}
+	}
+	d.stats.RPCWall = append(d.stats.RPCWall, wall)
+	d.stats.Status[status]++
 }
 
 // Plan returns a validated plan, or nil and a reason: no_target, rpc, status, invalid.
@@ -107,10 +139,13 @@ func (d *Defragmenter) Plan(c *sim.Cluster, blocked model.PodRes, running []Runn
 
 	ctx, cancel := context.WithTimeout(context.Background(), d.TimeLimit*3/2+2*time.Second)
 	defer cancel()
+	t0 := time.Now()
 	resp, err := d.Solver.Defrag(ctx, req)
 	if err != nil {
+		d.record(time.Since(t0), "rpc_error")
 		return nil, "rpc"
 	}
+	d.record(time.Since(t0), resp.Status)
 	if resp.Status != "OPTIMAL" && resp.Status != "FEASIBLE" {
 		return nil, "status"
 	}

@@ -35,13 +35,17 @@ type run1b struct {
 	Conflicts  int         `json:"bind_conflicts"`
 	Plans      int         `json:"defrag_plans"`
 	Migrations int         `json:"migrations"`
-	LostGpuH   float64     `json:"lost_gpu_hours"`
-	Rejected   map[string]int
-	SolveP99   float64        `json:"solve_p99_ms"`
-	Batches    int            `json:"batches"`
-	Improved   int            `json:"improved_batches"`
-	Fallbacks  map[string]int `json:"fallbacks"`
-	WallS      float64        `json:"wall_s"`
+	// Defrag RPC wall time (ms, per run) and solver status counts.
+	DefragRPCP50 float64        `json:"defrag_rpc_p50_ms"`
+	DefragRPCP99 float64        `json:"defrag_rpc_p99_ms"`
+	DefragStatus map[string]int `json:"defrag_status,omitempty"`
+	LostGpuH     float64        `json:"lost_gpu_hours"`
+	Rejected     map[string]int
+	SolveP99     float64        `json:"solve_p99_ms"`
+	Batches      int            `json:"batches"`
+	Improved     int            `json:"improved_batches"`
+	Fallbacks    map[string]int `json:"fallbacks"`
+	WallS        float64        `json:"wall_s"`
 }
 
 func runSuite1b(args []string) error {
@@ -144,9 +148,11 @@ func runSuite1b(args []string) error {
 					}
 					cfg.Decider = timed.PolicyDecider{Policy: pol}
 				}
+				var dfr *mip.Defragmenter
 				if defrag {
+					dfr = &mip.Defragmenter{Solver: client, MaxMoves: 4, TimeLimit: time.Second, Deterministic: true, Workers: cpWorkers}
 					cfg.Defrag = &timed.DefragConfig{
-						Planner:  &mip.Defragmenter{Solver: client, MaxMoves: 4, TimeLimit: time.Second, Deterministic: true, Workers: cpWorkers},
+						Planner:  dfr,
 						Interval: 60, CheckpointInterval: 1800, Restart: rst, Grace: grc, BenefitHorizon: 3600, Margin: 0.2, Seed: j.seed,
 					}
 				}
@@ -163,6 +169,10 @@ func runSuite1b(args []string) error {
 					Alloc: 100 * r.AllocTimeAvg, Unplaced: r.Unplaced, PendingBy: r.PendingByGpus, Conflicts: r.BindConflicts,
 					Plans: r.Defrag.Plans, Migrations: r.Defrag.Migrations, LostGpuH: r.Defrag.LostGpuSec / 3600,
 					Rejected: r.Defrag.Rejected, SolveP99: pctl(r.SolveWall, 0.99), WallS: time.Since(t0).Seconds()}
+				if dfr != nil {
+					st := dfr.Stats()
+					res.DefragRPCP50, res.DefragRPCP99, res.DefragStatus = pctl(st.RPCWall, 0.5), pctl(st.RPCWall, 0.99), st.Status
+				}
 				if pl != nil {
 					res.Batches, res.Improved, res.Fallbacks = pl.Stats.Batches, pl.Stats.Improved, pl.Stats.Fallbacks
 				}
@@ -250,6 +260,37 @@ func suite1bReport(vs []string, ls []float64, runs []run1b, lo, hi int64, desc s
 			pm, pc := meanCI(pl)
 			hm, hc := meanCI(hy)
 			fmt.Fprintf(&b, "| %s | %.1f ± %.1f | %.1f ± %.1f |\n", v, pm, pc, hm, hc)
+		}
+		b.WriteString("\n")
+		fmt.Fprintf(&b, "Defrag planning cost: Defrag RPC wall time per run (p50 and p99 over the run's plans, mean ± 95%% CI across seeds) and solver status counts summed over seeds:\n\n| variant | RPC p50 ms | RPC p99 ms | solver status counts |\n|---|---|---|---|\n")
+		for _, v := range vs {
+			var p50, p99 []float64
+			tot := map[string]int{}
+			for _, r := range runs {
+				if r.Variant == v && r.Load == l {
+					p50 = append(p50, r.DefragRPCP50)
+					p99 = append(p99, r.DefragRPCP99)
+					for k, n := range r.DefragStatus {
+						tot[k] += n
+					}
+				}
+			}
+			keys := make([]string, 0, len(tot))
+			for k := range tot {
+				keys = append(keys, k)
+			}
+			sort.Strings(keys)
+			parts := make([]string, len(keys))
+			for i, k := range keys {
+				parts[i] = fmt.Sprintf("%s %d", k, tot[k])
+			}
+			sc := "-"
+			if len(parts) > 0 {
+				sc = strings.Join(parts, ", ")
+			}
+			m50, c50 := meanCI(p50)
+			m99, c99 := meanCI(p99)
+			fmt.Fprintf(&b, "| %s | %.1f ± %.1f | %.1f ± %.1f | %s |\n", v, m50, c50, m99, c99, sc)
 		}
 		b.WriteString("\n")
 	}
