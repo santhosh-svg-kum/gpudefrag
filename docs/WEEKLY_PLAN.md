@@ -44,3 +44,15 @@
 - [x] 5. Fallback accounting: in suite reports, separate "solver status fallback" from "time limit hit" batch counts and show both. Tests on `mip.Stats`.
 - [x] 6. (Rewritten: the original premise was wrong, `mip.Defragmenter` sends moves to the solver as a Defrag RPC and never calls `genPatterns`, so there is no pattern cache to share.) Defrag planning cost: record the Defrag RPC wall time and solver status counts in `mip` defrag stats and show p50/p99 in the suite 1b report. Tests.
 - [x] 7. Elastic-mode design note: `docs/design/notes/` entry sketching how defrag and node provisioning would be merged into one decision (inputs, objective, what the proto would need), listing open questions. Docs only; no code.
+
+## Week 5
+
+Task 2c from week 1 stays open: it needs a `make suite1a` re-run on hardware that reproduces the published table.
+
+- [ ] 1. Solver-budget sensitivity sweep driver: `-budget-sweep` (e.g. 250,500,1000,2000 ms) for suite 1a, one row per budget with mean allocation and the time-limit/fallback fractions from `mip.Stats`. Test grid expansion and table formatting with a fake runner; do not publish numbers.
+- [ ] 2. Defrag planning cost vs benefit: in the suite 1b report, add the mean Defrag RPC wall time per accepted plan next to the mean GPUs unblocked per plan. Pure formatting function with table-driven tests.
+- [ ] 3. Provisioning-latency model for the elastic note: add a `timed.Provisioner` interface plus a fixed-latency fake (node appears after N seconds, released on request), unused by any suite yet. Tests for latency, release and capacity accounting.
+- [ ] 4. Batch-level blocked-pod grouping: a pure function that groups blocked pods by shared candidate nodes (reusing the decomposition union-find), as input for batch-level provisioning decisions from the elastic note's open questions. Tests: shared node, disjoint, gang-linked.
+- [ ] 5. Solver response validation hardening: `mip` validation rejects a response that places a pod on a node outside its candidates or overcommits a GPU; add table-driven tests for each rejection and make sure the placer falls back to the hint (not a crash).
+- [ ] 6. Clustering gap, unchecked item 1: pick the first entry under "Not checked" in `docs/design/notes/2026-11-02-packing-clustering-gap.md` that can be tested locally and add a unit test or script that checks it; update the note with the finding (ruled out or confirmed).
+- [ ] 7. Limitations audit: add a test in `cmd/gpudefrag-sim` that every flag registered by the suites is documented in README or docs/RESULTS.md (flag-name grep), and document any missing flags.
