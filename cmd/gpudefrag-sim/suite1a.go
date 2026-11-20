@@ -104,6 +104,7 @@ func runSuite1a(args []string) error {
 	solverProcs := fs.Int("solver-procs", 1, "solver processes to start locally (requests are round-robined)")
 	addr := fs.String("solver", "", "solver address (default: start one locally)")
 	budgetMs := fs.Int("solver-budget-ms", defaultBudgetMs, "CP-SAT time limit per batch in ms for gpudefrag variants without an explicit t= option")
+	budgetSweep := fs.String("budget-sweep", "", "comma-separated CP-SAT time limits in ms (e.g. 250,500,1000,2000): run each gpudefrag variant without t= once per value and add a budget sweep table")
 	fs.Parse(args)
 	if *budgetMs <= 0 {
 		return fmt.Errorf("-solver-budget-ms must be positive, got %d", *budgetMs)
@@ -124,7 +125,11 @@ func runSuite1a(args []string) error {
 	}
 	var vs []variant
 	needSolver := false
-	for _, s := range strings.Split(*variants, ",") {
+	names, err := budgetVariants(strings.Split(*variants, ","), *budgetSweep)
+	if err != nil {
+		return err
+	}
+	for _, s := range names {
 		v, err := parseVariantBudget(s, *budgetMs)
 		if err != nil {
 			return err
@@ -217,6 +222,9 @@ func runSuite1a(args []string) error {
 		return err
 	}
 	report := suite1aReport(vs, results, *seedLo, *seedHi, *budgetMs)
+	if *budgetSweep != "" {
+		report += budgetSweepSection(vs, results)
+	}
 	fmt.Print(report)
 	return os.WriteFile(filepath.Join(*out, "report.md"), []byte(report), 0o644)
 }

@@ -49,7 +49,7 @@
 
 Task 2c from week 1 stays open: it needs a `make suite1a` re-run on hardware that reproduces the published table.
 
-- [ ] 1. Solver-budget sensitivity sweep driver: `-budget-sweep` (e.g. 250,500,1000,2000 ms) for suite 1a, one row per budget with mean allocation and the time-limit/fallback fractions from `mip.Stats`. Test grid expansion and table formatting with a fake runner; do not publish numbers.
+- [x] 1. Solver-budget sensitivity sweep driver: `-budget-sweep` (e.g. 250,500,1000,2000 ms) for suite 1a, one row per budget with mean allocation and the time-limit/fallback fractions from `mip.Stats`. Test grid expansion and table formatting with a fake runner; do not publish numbers.
 - [ ] 2. Defrag planning cost vs benefit: in the suite 1b report, add the mean Defrag RPC wall time per accepted plan next to the mean GPUs unblocked per plan. Pure formatting function with table-driven tests.
 - [ ] 3. Provisioning-latency model for the elastic note: add a `timed.Provisioner` interface plus a fixed-latency fake (node appears after N seconds, released on request), unused by any suite yet. Tests for latency, release and capacity accounting.
 - [ ] 4. Batch-level blocked-pod grouping: a pure function that groups blocked pods by shared candidate nodes (reusing the decomposition union-find), as input for batch-level provisioning decisions from the elastic note's open questions. Tests: shared node, disjoint, gang-linked.
