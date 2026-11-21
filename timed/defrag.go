@@ -29,11 +29,12 @@ type DefragConfig struct {
 }
 
 type DefragStats struct {
-	Ticks      int
-	Plans      int
-	Migrations int
-	LostGpuSec float64 // GPU-seconds of work lost to migration (incl. restart)
-	Rejected   map[string]int
+	Ticks        int
+	Plans        int
+	Migrations   int
+	UnblockedGpu float64 // GPUs requested by blocked pods bound via executed plans
+	LostGpuSec   float64 // GPU-seconds of work lost to migration (incl. restart)
+	Rejected     map[string]int
 }
 
 // phase is job i's checkpoint offset, drawn per job from the seed so that
@@ -149,5 +150,6 @@ func (s *state) executeDefrag(plan *mip.Plan, blocked *job) {
 	}
 	s.pending = rest
 	s.res.Defrag.Plans++
+	s.res.Defrag.UnblockedGpu += float64(blocked.Pod.Res.TotalMilliGpu()) / model.Milli
 	s.dirty = true
 }
