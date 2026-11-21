@@ -36,16 +36,18 @@ type run1b struct {
 	Plans      int         `json:"defrag_plans"`
 	Migrations int         `json:"migrations"`
 	// Defrag RPC wall time (ms, per run) and solver status counts.
-	DefragRPCP50 float64        `json:"defrag_rpc_p50_ms"`
-	DefragRPCP99 float64        `json:"defrag_rpc_p99_ms"`
-	DefragStatus map[string]int `json:"defrag_status,omitempty"`
-	LostGpuH     float64        `json:"lost_gpu_hours"`
-	Rejected     map[string]int
-	SolveP99     float64        `json:"solve_p99_ms"`
-	Batches      int            `json:"batches"`
-	Improved     int            `json:"improved_batches"`
-	Fallbacks    map[string]int `json:"fallbacks"`
-	WallS        float64        `json:"wall_s"`
+	DefragRPCP50     float64        `json:"defrag_rpc_p50_ms"`
+	DefragRPCP99     float64        `json:"defrag_rpc_p99_ms"`
+	DefragRPCTotalMs float64        `json:"defrag_rpc_total_ms"`
+	UnblockedGpu     float64        `json:"unblocked_gpus"`
+	DefragStatus     map[string]int `json:"defrag_status,omitempty"`
+	LostGpuH         float64        `json:"lost_gpu_hours"`
+	Rejected         map[string]int
+	SolveP99         float64        `json:"solve_p99_ms"`
+	Batches          int            `json:"batches"`
+	Improved         int            `json:"improved_batches"`
+	Fallbacks        map[string]int `json:"fallbacks"`
+	WallS            float64        `json:"wall_s"`
 }
 
 func runSuite1b(args []string) error {
@@ -172,6 +174,10 @@ func runSuite1b(args []string) error {
 				if dfr != nil {
 					st := dfr.Stats()
 					res.DefragRPCP50, res.DefragRPCP99, res.DefragStatus = pctl(st.RPCWall, 0.5), pctl(st.RPCWall, 0.99), st.Status
+					for _, w := range st.RPCWall {
+						res.DefragRPCTotalMs += float64(w.Microseconds()) / 1000
+					}
+					res.UnblockedGpu = r.Defrag.UnblockedGpu
 				}
 				if pl != nil {
 					res.Batches, res.Improved, res.Fallbacks = pl.Stats.Batches, pl.Stats.Improved, pl.Stats.Fallbacks
@@ -293,6 +299,33 @@ func suite1bReport(vs []string, ls []float64, runs []run1b, lo, hi int64, desc s
 			fmt.Fprintf(&b, "| %s | %.1f ± %.1f | %.1f ± %.1f | %s |\n", v, m50, c50, m99, c99, sc)
 		}
 		b.WriteString("\n")
+		fmt.Fprintf(&b, "Planning cost vs benefit, pooled over seeds: total Defrag RPC wall time (all plans tried, including refused ones) divided by executed plans, next to the mean GPUs unblocked per executed plan:\n\n| variant | mean Defrag RPC ms per executed plan | mean GPUs unblocked per plan |\n|---|---|---|\n")
+		for _, v := range vs {
+			var rpc, gpus float64
+			var plans int
+			for _, r := range runs {
+				if r.Variant == v && r.Load == l {
+					rpc += r.DefragRPCTotalMs
+					gpus += r.UnblockedGpu
+					plans += r.Plans
+				}
+			}
+			if ms, g, ok := defragCostPerPlan(rpc, plans, gpus); ok {
+				fmt.Fprintf(&b, "| %s | %.1f | %.2f |\n", v, ms, g)
+			} else {
+				fmt.Fprintf(&b, "| %s | n/a | n/a |\n", v)
+			}
+		}
+		b.WriteString("\n")
 	}
 	return b.String()
+}
+
+// defragCostPerPlan returns mean RPC milliseconds and mean GPUs unblocked per
+// executed plan; ok is false when no plan was executed.
+func defragCostPerPlan(rpcMs float64, plans int, unblockedGpu float64) (ms, gpus float64, ok bool) {
+	if plans <= 0 {
+		return 0, 0, false
+	}
+	return rpcMs / float64(plans), unblockedGpu / float64(plans), true
 }
