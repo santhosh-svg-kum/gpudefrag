@@ -416,3 +416,67 @@ func TestStatsSplitsByHintSource(t *testing.T) {
 		t.Fatalf("binpack hint: %+v", pl.Stats.ByHint)
 	}
 }
+
+// Every way a solver answer can violate the model must be rejected by
+// validate, and the placer must then keep the FGD hint instead of crashing.
+func TestValidateRejectsBadAssignments(t *testing.T) {
+	cases := []struct {
+		name string
+		asg  []*pb.Assignment
+	}{
+		{"pod_out_of_range", []*pb.Assignment{{Pod: 7, Node: 0, Gpus: []int32{0}}}},
+		{"pod_negative", []*pb.Assignment{{Pod: -1, Node: 0, Gpus: []int32{0}}}},
+		{"node_out_of_range", []*pb.Assignment{{Pod: 1, Node: 9, Gpus: []int32{0}}}},
+		{"node_negative", []*pb.Assignment{{Pod: 1, Node: -1, Gpus: []int32{0}}}},
+		{"gpu_index_out_of_range", []*pb.Assignment{{Pod: 1, Node: 0, Gpus: []int32{3}}}},
+		{"gpu_index_negative", []*pb.Assignment{{Pod: 1, Node: 0, Gpus: []int32{-1}}}},
+		{"wrong_gpu_count", []*pb.Assignment{{Pod: 1, Node: 0, Gpus: []int32{0, 0}}}},
+		{"gpu_overcommit_share", []*pb.Assignment{{Pod: 0, Node: 1, Gpus: []int32{0}}, {Pod: 1, Node: 1, Gpus: []int32{0}}}},
+		{"gpu_overcommit_node_b", []*pb.Assignment{{Pod: 1, Node: 1, Gpus: []int32{0}}}},
+		{"same_pod_twice", []*pb.Assignment{{Pod: 0, Node: 0, Gpus: []int32{0}}, {Pod: 0, Node: 1, Gpus: []int32{0}}}},
+	}
+	for _, tc := range cases {
+		c, pods, typ := trap()
+		cands := []map[int]bool{{0: true, 1: true}, {0: true, 1: true}}
+		if _, ok := validate(c, pods, cands, tc.asg); ok {
+			t.Errorf("%s: validate accepted a bad answer", tc.name)
+		}
+		c, pods, typ = trap()
+		f := &fakeSolver{resp: &pb.PlaceResponse{Status: "OPTIMAL", Assignments: tc.asg}}
+		pl := placer(f, typ)
+		placed := pl.PlaceBatch(c, pods)
+		if !placed[0] || placed[1] || c.UsedGpuMilli() != 1000 {
+			t.Errorf("%s: must keep the hint: placed=%v used=%d", tc.name, placed, c.UsedGpuMilli())
+		}
+		if pl.Stats.Fallbacks["invalid"] != 1 {
+			t.Errorf("%s: fallbacks %v", tc.name, pl.Stats.Fallbacks)
+		}
+	}
+}
+
+func TestValidateRejectsNodeOutsideCandidates(t *testing.T) {
+	c, pods, _ := trap()
+	cands := []map[int]bool{{1: true}, {0: true}}
+	asg := []*pb.Assignment{{Pod: 0, Node: 0, Gpus: []int32{0}}}
+	if _, ok := validate(c, pods, cands, asg); ok {
+		t.Fatal("pod placed outside its candidate set was accepted")
+	}
+	asg = []*pb.Assignment{{Pod: 0, Node: 1, Gpus: []int32{0}}, {Pod: 1, Node: 0, Gpus: []int32{0}}}
+	if _, ok := validate(c, pods, cands, asg); !ok {
+		t.Fatal("a valid answer inside the candidates was rejected")
+	}
+}
+
+func TestValidateRejectsCPUAndMemoryOvercommit(t *testing.T) {
+	c, pods, _ := trap()
+	cands := []map[int]bool{{0: true, 1: true}, {0: true, 1: true}}
+	pods[1].Res.MilliCPU = 65000
+	if _, ok := validate(c, pods, cands, []*pb.Assignment{{Pod: 1, Node: 0, Gpus: []int32{0}}}); ok {
+		t.Fatal("CPU overcommit accepted")
+	}
+	pods[1].Res.MilliCPU = 1000
+	pods[1].Res.MemMiB = 1<<20 + 1
+	if _, ok := validate(c, pods, cands, []*pb.Assignment{{Pod: 1, Node: 0, Gpus: []int32{0}}}); ok {
+		t.Fatal("memory overcommit accepted")
+	}
+}
