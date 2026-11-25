@@ -28,7 +28,12 @@ and `sched/sched.go`. It does not claim a fix.
 - Integer truncation order in `GpuClustering` (`MaxScore/4*(...)/MaxScore`
   evaluates left to right) and the idle-node constant in GpuPacking
   (`max(MaxScore/3-free, free)`).
-- Whether upstream's Affinity tags count pods or GPUs.
+- ~~Whether upstream's Affinity tags count pods or GPUs.~~ Ruled out as a
+  cause: `GpuClustering.Score` only tests `Affinity[tag] > 0` and
+  `len(Affinity)`, so the count's magnitude cannot change a score. What
+  matters is that a tag is removed when its last pod leaves, which
+  `sim.Cluster.Unbind` does. Pinned by
+  `TestGpuClusteringAffinityCountMagnitudeIrrelevant`.
 - Per-seed trace order differences: the gap is 0/10 exact on both policies,
   but also 0/10 on Random, so exactness is not informative.
 

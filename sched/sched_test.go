@@ -284,3 +284,38 @@ func TestGpuClusteringScoreArithmetic(t *testing.T) {
 		t.Errorf("non-GPU pod: got %d", got[0])
 	}
 }
+
+// TestGpuClusteringAffinityCountMagnitudeIrrelevant checks the "do upstream
+// Affinity tags count pods or GPUs?" question from the clustering gap note:
+// GpuClustering reads only whether a tag is present and how many distinct
+// tags a node has, so counting pods (what sim.Cluster does) or GPUs cannot
+// change any score. The tag must disappear exactly when its last pod leaves.
+func TestGpuClusteringAffinityCountMagnitudeIrrelevant(t *testing.T) {
+	two := model.PodRes{GpuNum: 2, GpuMilli: 1000} // tag "2-gpu"
+	score := func(c *sim.Cluster) int64 {
+		return GpuClustering{}.Score(c, []int{0}, two, rand.New(rand.NewSource(1)))[0]
+	}
+	mk := func() *sim.Cluster {
+		return sim.NewCluster([]*model.NodeRes{node("n", 64000, 1000, 1000, 1000, 1000, 1000, 1000, 1000, 1000)})
+	}
+	c := mk()
+	c.Bind(0, two, []int{0, 1})
+	c.Bind(0, two, []int{2, 3})
+	if got := c.Nodes[0].Affinity["2-gpu"]; got != 2 {
+		t.Fatalf("tag count after two pods = %d, want 2 (pods, not GPUs)", got)
+	}
+	byPods := score(c)
+	c.Nodes[0].Affinity["2-gpu"] = 4 // as if tags counted GPUs
+	if byGPUs := score(c); byGPUs != byPods {
+		t.Errorf("score depends on count magnitude: pods %d vs GPUs %d", byPods, byGPUs)
+	}
+	c.Nodes[0].Affinity["2-gpu"] = 2
+	c.Unbind(0, two, []int{0, 1})
+	if c.Nodes[0].Affinity["2-gpu"] != 1 {
+		t.Fatalf("tag lost after first of two pods left")
+	}
+	c.Unbind(0, two, []int{2, 3})
+	if _, ok := c.Nodes[0].Affinity["2-gpu"]; ok {
+		t.Errorf("tag still present after last pod left")
+	}
+}
