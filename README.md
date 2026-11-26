@@ -58,6 +58,30 @@ make suite1b   # timed synthetic workload from openb, with defrag
 make suite2    # Helios Venus gang-training backtest with topology domains
 ```
 
+### Command-line flags
+
+`gpudefrag-sim` has the subcommands `calib`, `suite1a`, `suite1b` and `suite2`.
+The `make` targets above use the defaults. Run `gpudefrag-sim <subcommand> -h`
+for defaults. Every flag is checked against this file and RESULTS.md by a test.
+
+- Common to all: `-data`, `-out`, `-seed-from` / `-seed-to` (not suite 2).
+- `calib`: `-policies`, `-tol` (gate tolerance, 1.0 pp), `-workers`,
+  `-normalize-baselines` (experiment, default off), `-trace-placements FILE`
+  (CSV of one policy and one seed, for finding the first divergence).
+- Variants and runs (suites 1a, 1b, 2): `-variants`, `-parallel`,
+  `-solver` (address; default starts one locally), `-solver-dir`,
+  `-solver-procs` (local solver processes, round-robined),
+  `-solver-budget-ms` (CP-SAT limit per batch, default 500).
+- Suite 1a: `-budget-sweep` (one row per budget).
+- Suite 1b: `-loads`, `-cluster-frac`, `-max-dur`, `-warmup`, `-measure`, `-batch`.
+- Suite 2: `-cluster`, `-compress`, `-windows`, `-domain`, `-batch`.
+- Objective (suites 1b, 2): `-obj-gpu-weight`, `-idle-weight`, `-warm-best`
+  (warm start from the better of FGD and Binpack). Suite 2 only: `-gang-weight`,
+  `-gang-free`. All default to the published behavior.
+- Defrag (suites 1b, 2): `-restart` (seconds, default 60), `-grace` (eviction
+  grace seconds, default 0), `-restart-sweep` and `-grace-sweep` (suite 1b
+  crosses them; `make sweep-defrag`).
+
 ## How it works
 
 ```
