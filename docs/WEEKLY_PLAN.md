@@ -55,4 +55,16 @@ Task 2c from week 1 stays open: it needs a `make suite1a` re-run on hardware tha
 - [x] 4. Batch-level blocked-pod grouping: a pure function that groups blocked pods by shared candidate nodes (reusing the decomposition union-find), as input for batch-level provisioning decisions from the elastic note's open questions. Tests: shared node, disjoint, gang-linked.
 - [x] 5. Solver response validation hardening: `mip` validation rejects a response that places a pod on a node outside its candidates or overcommits a GPU; add table-driven tests for each rejection and make sure the placer falls back to the hint (not a crash).
 - [x] 6. Clustering gap (done on the pods-vs-GPUs affinity item, the only unchecked one testable locally; normalization and truncation were covered in week 3):  pick the first entry under "Not checked" in `docs/design/notes/2026-11-02-packing-clustering-gap.md` that can be tested locally and add a unit test or script that checks it; update the note with the finding (ruled out or confirmed).
-- [ ] 7. Limitations audit: add a test in `cmd/gpudefrag-sim` that every flag registered by the suites is documented in README or docs/RESULTS.md (flag-name grep), and document any missing flags.
+- [x] 7. Limitations audit: add a test in `cmd/gpudefrag-sim` that every flag registered by the suites is documented in README or docs/RESULTS.md (flag-name grep), and document any missing flags.
+
+## Week 6
+
+Task 2c from week 1 stays open: it needs a `make suite1a` re-run on hardware that reproduces the published table.
+
+- [ ] 1. Docs-flag test tightening: make `TestFlagsDocumented` also fail when README documents a `-flag` that no subcommand registers (stale docs). Fix any stale mentions it finds.
+- [ ] 2. Break-even CLI: a `gpudefrag-sim breakeven -in results/sweep-defrag/report.md` subcommand that prints the break-even restart time using the existing pure function. Tests on a fixture table.
+- [ ] 3. Provisioner in timed sim, part 1: wire `timed.Provisioner` into the timed simulator behind `-provision-latency` (default 0 = off, no behavior change). Test that a blocked pod binds on a provisioned node after the latency.
+- [ ] 4. Provisioner in timed sim, part 2: report provisioned node-seconds in the suite 1b report when the flag is on. Tests for the accounting and header note.
+- [ ] 5. Blocked-pod grouping consumer: use the grouping function from week 5 to cap provisioned nodes per group (one node per group of blocked pods that share candidates) in the fake provisioner path. Tests.
+- [ ] 6. Pattern-generation profile: add a `-profile-batches N` option to suite 1a that prints per-phase mean time for the first N batches, with a test on the formatting. Docs-only numbers are not published.
+- [ ] 7. Model-build in Go design note: `docs/design/notes/` entry sketching building the CP-SAT model in Go versus Python (what the proto keeps, what moves, benchmarking plan). Docs only.
