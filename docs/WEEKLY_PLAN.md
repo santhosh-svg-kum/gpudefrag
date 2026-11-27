@@ -61,7 +61,7 @@ Task 2c from week 1 stays open: it needs a `make suite1a` re-run on hardware tha
 
 Task 2c from week 1 stays open: it needs a `make suite1a` re-run on hardware that reproduces the published table.
 
-- [ ] 1. Docs-flag test tightening: make `TestFlagsDocumented` also fail when README documents a `-flag` that no subcommand registers (stale docs). Fix any stale mentions it finds.
+- [x] 1. Docs-flag test tightening: make `TestFlagsDocumented` also fail when README documents a `-flag` that no subcommand registers (stale docs). Fix any stale mentions it finds. (Done; no stale mentions were found.)
 - [ ] 2. Break-even CLI: a `gpudefrag-sim breakeven -in results/sweep-defrag/report.md` subcommand that prints the break-even restart time using the existing pure function. Tests on a fixture table.
 - [ ] 3. Provisioner in timed sim, part 1: wire `timed.Provisioner` into the timed simulator behind `-provision-latency` (default 0 = off, no behavior change). Test that a blocked pod binds on a provisioned node after the latency.
 - [ ] 4. Provisioner in timed sim, part 2: report provisioned node-seconds in the suite 1b report when the flag is on. Tests for the accounting and header note.
